@@ -1,23 +1,35 @@
 import aiosqlite
+from datetime import datetime
 
 async def init_db():
     """Создаёт таблицы при первом запуске"""
     async with aiosqlite.connect("events.db") as db:
         await db.execute('''
-            CREATE TABLE IF NOT EXISTS profiles (
-                user_id INTEGER PRIMARY KEY,
-                username TEXT,
-                nickname TEXT,
-                photo_id TEXT
-            )
+        CREATE TABLE IF NOT EXISTS profiles (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            nickname TEXT,
+            photo_id TEXT
+        )
         ''')
         await db.execute('''
-            CREATE TABLE IF NOT EXISTS registrations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                event_id INTEGER,
-                UNIQUE(user_id, event_id)
-            )
+        CREATE TABLE IF NOT EXISTS registrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            event_id INTEGER,
+            UNIQUE(user_id, event_id)
+        )
+        ''')
+        # Новая таблица для мероприятий
+        await db.execute('''
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            date TEXT NOT NULL,
+            time TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_active INTEGER DEFAULT 1
+        )
         ''')
         await db.commit()
 
@@ -81,10 +93,10 @@ async def get_event_participants(event_id: int):
     """Получает участников события с данными профиля"""
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute('''
-            SELECT p.nickname, p.photo_id
-            FROM registrations r
-            JOIN profiles p ON r.user_id = p.user_id
-            WHERE r.event_id = ?
+        SELECT p.nickname, p.photo_id
+        FROM registrations r
+        JOIN profiles p ON r.user_id = p.user_id
+        WHERE r.event_id = ?
         ''', (event_id,))
         return await cursor.fetchall()
 
@@ -92,9 +104,57 @@ async def get_all_event_counts():
     """Получает количество участников для всех мероприятий"""
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute('''
-            SELECT event_id, COUNT(*) as count
-            FROM registrations
-            GROUP BY event_id
+        SELECT event_id, COUNT(*) as count
+        FROM registrations
+        GROUP BY event_id
         ''')
         result = await cursor.fetchall()
         return {row[0]: row[1] for row in result}
+
+# === НОВЫЕ ФУНКЦИИ ДЛЯ МЕРОПРИЯТИЙ ===
+
+async def create_event(name: str, date: str, time: str):
+    """Создаёт новое мероприятие"""
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute(
+            'INSERT INTO events (name, date, time) VALUES (?, ?, ?)',
+            (name, date, time)
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+async def get_all_events():
+    """Получает все активные мероприятия"""
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute(
+            'SELECT id, name, date, time FROM events WHERE is_active = 1 ORDER BY date, time'
+        )
+        return await cursor.fetchall()
+
+async def get_event_by_id(event_id: int):
+    """Получает мероприятие по ID"""
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute(
+            'SELECT id, name, date, time FROM events WHERE id = ? AND is_active = 1',
+            (event_id,)
+        )
+        return await cursor.fetchone()
+
+async def delete_event(event_id: int):
+    """Удаляет (деактивирует) мероприятие"""
+    async with aiosqlite.connect("events.db") as db:
+        await db.execute(
+            'UPDATE events SET is_active = 0 WHERE id = ?',
+            (event_id,)
+        )
+        await db.commit()
+
+async def get_event_count(event_id: int):
+    """Получает количество участников конкретного мероприятия"""
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute(
+            'SELECT COUNT(*) FROM registrations WHERE event_id = ?',
+            (event_id,)
+        )
+        result = await cursor.fetchone()
+        return result[0] if result else 0

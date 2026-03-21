@@ -4,17 +4,17 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import InputMediaPhoto
 import logging
 from . import dp
-
 from database import (
     get_user_profile,
     register_for_event,
     check_user_registration,
     unregister_from_event,
     get_event_participants,
-    get_all_event_counts
+    get_all_event_counts,
+    get_all_events,
+    get_event_by_id
 )
 from keyboards import (
-    EVENTS,
     get_events_keyboard,
     get_register_keyboard,
     get_registered_keyboard,
@@ -30,9 +30,10 @@ async def cmd_start(message: types.Message, state: FSMContext):
     if profile and profile[0]:
         registrations = await check_user_registration(message.from_user.id)
         event_counts = await get_all_event_counts()
+        events = await get_all_events()
         await message.answer(
             f"👋 Привет, {profile[0]}!",
-            reply_markup=get_events_keyboard(registrations, event_counts)
+            reply_markup=get_events_keyboard(registrations, event_counts, events)
         )
     else:
         await message.answer(
@@ -48,10 +49,11 @@ async def cmd_events(message: types.Message, state: FSMContext):
     if profile and profile[0]:
         registrations = await check_user_registration(message.from_user.id)
         event_counts = await get_all_event_counts()
+        events = await get_all_events()
         await message.answer(
-            "📋 **Мероприятия**\n\nВыберите мероприятие:",
+            "📋 Мероприятия\n\nВыберите мероприятие:",
             parse_mode="Markdown",
-            reply_markup=get_events_keyboard(registrations, event_counts)
+            reply_markup=get_events_keyboard(registrations, event_counts, events)
         )
     else:
         await message.answer(
@@ -66,36 +68,44 @@ async def btn_menu(message: types.Message, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("event_"))
 async def select_event(callback: types.CallbackQuery):
-    """Показывает мероприятие со списком участников и фото альбомом"""
+    """Показывает мероприятие со списком участников, датой и временем"""
     event_id = int(callback.data.split("_")[1])
-    event_name = EVENTS.get(event_id)
+    event = await get_event_by_id(event_id)
+    
+    if not event:
+        await callback.answer("Мероприятие не найдено", show_alert=True)
+        return
+
+    _, event_name, event_date, event_time = event
+    
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
     
+    text = f"📅 **{event_name}**\n"
+    text += f"🗓 **Дата:** {event_date}\n"
+    text += f"⏰ **Время:** {event_time}\n\n"
+    
     if participants:
-        text = f"📅 **{event_name}**\n\n"
         text += "**Список участников:**\n"
         for i, (nickname, photo_id) in enumerate(participants, 1):
             is_me = " (вы)" if nickname == callback.from_user.username else ""
             text += f"{i}. {nickname}{is_me}\n"
     else:
-        text = f"📅 **{event_name}**\n\n"
         text += "Пока никого нет. Будьте первым!"
-    
+
     if registered:
         keyboard = get_registered_keyboard(event_id)
     else:
         keyboard = get_register_keyboard(event_id)
-    
+
     await callback.message.edit_text(
         text,
         parse_mode="Markdown",
         reply_markup=keyboard
     )
-    
-    # Отправляем фото альбомом
+
     photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
-    
+
     if photos_with_ids:
         for i in range(0, len(photos_with_ids), 10):
             batch = photos_with_ids[i:i+10]
@@ -103,7 +113,6 @@ async def select_event(callback: types.CallbackQuery):
                 InputMediaPhoto(media=photo_id)
                 for _, photo_id in batch
             ]
-            
             try:
                 await callback.message.answer_media_group(media=media_group)
             except Exception as e:
@@ -113,12 +122,20 @@ async def select_event(callback: types.CallbackQuery):
 async def register_event(callback: types.CallbackQuery):
     """Запись на мероприятие"""
     event_id = int(callback.data.split("_")[1])
-    event_name = EVENTS.get(event_id)
-    success = await register_for_event(callback.from_user.id, event_id)
+    event = await get_event_by_id(event_id)
     
+    if not event:
+        await callback.answer("Мероприятие не найдено", show_alert=True)
+        return
+    
+    event_name = event[1]
+    
+    success = await register_for_event(callback.from_user.id, event_id)
     if success:
         participants = await get_event_participants(event_id)
-        text = f"📅 **{event_name}**\n\n"
+        text = f"📅 **{event_name}**\n"
+        text += f"🗓 **Дата:** {event[2]}\n"
+        text += f"⏰ **Время:** {event[3]}\n\n"
         text += "**Список участников:**\n"
         for i, (nickname, photo_id) in enumerate(participants, 1):
             is_me = " (вы)" if nickname == callback.from_user.username else ""
@@ -130,17 +147,11 @@ async def register_event(callback: types.CallbackQuery):
             reply_markup=get_registered_keyboard(event_id)
         )
         
-        # Отправляем фото альбомом
         photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
-        
         if photos_with_ids:
             for i in range(0, len(photos_with_ids), 10):
                 batch = photos_with_ids[i:i+10]
-                media_group = [
-                    InputMediaPhoto(media=photo_id)
-                    for _, photo_id in batch
-                ]
-                
+                media_group = [InputMediaPhoto(media=photo_id) for _, photo_id in batch]
                 try:
                     await callback.message.answer_media_group(media=media_group)
                 except Exception as e:
@@ -152,20 +163,29 @@ async def register_event(callback: types.CallbackQuery):
 async def unregister_event(callback: types.CallbackQuery):
     """Отмена записи"""
     event_id = int(callback.data.split("_")[1])
-    event_name = EVENTS.get(event_id)
-    await unregister_from_event(callback.from_user.id, event_id)
+    event = await get_event_by_id(event_id)
     
+    if not event:
+        await callback.answer("Мероприятие не найдено", show_alert=True)
+        return
+    
+    event_name = event[1]
+    
+    await unregister_from_event(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
+    
+    text = f"📅 **{event_name}**\n"
+    text += f"🗓 **Дата:** {event[2]}\n"
+    text += f"⏰ **Время:** {event[3]}\n\n"
+    
     if participants:
-        text = f"📅 **{event_name}**\n\n"
         text += "**Список участников:**\n"
         for i, (nickname, photo_id) in enumerate(participants, 1):
             is_me = " (вы)" if nickname == callback.from_user.username else ""
             text += f"{i}. {nickname}{is_me}\n"
     else:
-        text = f"📅 **{event_name}**\n\n"
         text += "Пока никого нет. Будьте первым!"
-    
+
     await callback.message.edit_text(
         text,
         parse_mode="Markdown",
@@ -176,10 +196,11 @@ async def unregister_event(callback: types.CallbackQuery):
 async def go_back(callback: types.CallbackQuery):
     registrations = await check_user_registration(callback.from_user.id)
     event_counts = await get_all_event_counts()
+    events = await get_all_events()
     await callback.message.edit_text(
         "📋 Афиша\n\nВыберите мероприятие:",
         parse_mode="Markdown",
-        reply_markup=get_events_keyboard(registrations, event_counts)
+        reply_markup=get_events_keyboard(registrations, event_counts, events)
     )
 
 @dp.callback_query(F.data == "show_events")
@@ -187,11 +208,10 @@ async def show_events_from_profile(callback: types.CallbackQuery):
     """Кнопка Мероприятия из профиля"""
     registrations = await check_user_registration(callback.from_user.id)
     event_counts = await get_all_event_counts()
-    
+    events = await get_all_events()
     await callback.message.answer(
         "📋 **Мероприятия**\n\nВыберите мероприятие:",
         parse_mode="Markdown",
-        reply_markup=get_events_keyboard(registrations, event_counts)
+        reply_markup=get_events_keyboard(registrations, event_counts, events)
     )
-    
     await callback.answer()

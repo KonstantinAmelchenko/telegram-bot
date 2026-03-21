@@ -1,28 +1,25 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
-EVENTS = {
-    1: "🎨 Рисование",
-    2: "🏃 Забег",
-    3: "📚 Книги",
-    4: "🎮 Игры"
-}
-
-def get_events_keyboard(user_registrations: list = None, event_counts: dict = None):
+def get_events_keyboard(user_registrations: list = None, event_counts: dict = None, events: list = None):
     """Клавиатура со списком мероприятий и количеством участников"""
     if user_registrations is None:
         user_registrations = []
     if event_counts is None:
         event_counts = {}
+    if events is None:
+        events = []
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    for event_id, event_name in EVENTS.items():
+    
+    for event_id, event_name, event_date, event_time in events:
         status = " ✅" if event_id in user_registrations else ""
         count = event_counts.get(event_id, 0)
-        # Добавляем иконку и количество участников
-        event_text = f"{event_name}{status} 👥 {count}"
+        event_text = f"{event_name} | {event_date} {event_time}{status} 👥 {count}"
+        
         keyboard.inline_keyboard.append([
             InlineKeyboardButton(text=event_text, callback_data=f"event_{event_id}")
         ])
+    
     keyboard.inline_keyboard.append([InlineKeyboardButton(text="👤 Профиль", callback_data="profile")])
     return keyboard
 
