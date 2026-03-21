@@ -1,8 +1,7 @@
 from aiogram import types, F
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
-import asyncio
-import logging
+from aiogram.types import InputMediaPhoto
 from . import dp
 
 from database import (
@@ -63,7 +62,7 @@ async def btn_menu(message: types.Message, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("event_"))
 async def select_event(callback: types.CallbackQuery):
-    """Показывает мероприятие со списком участников и их фото"""
+    """Показывает мероприятие со списком участников и фото альбомом"""
     event_id = int(callback.data.split("_")[1])
     event_name = EVENTS.get(event_id)
     registered = await check_user_registration(callback.from_user.id, event_id)
@@ -90,23 +89,29 @@ async def select_event(callback: types.CallbackQuery):
         reply_markup=keyboard
     )
     
-    # Отправляем фото всех участников
+    # Отправляем фото альбомом (до 10 фото вместе)
     if participants:
-        for i, (nickname, photo_id) in enumerate(participants, 1):
-            if photo_id:
+        photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
+        
+        if photos_with_ids:
+            # Разбиваем на группы по 10 фото (лимит Telegram)
+            for i in range(0, len(photos_with_ids), 10):
+                batch = photos_with_ids[i:i+10]
+                media_group = [
+                    InputMediaPhoto(media=photo_id)
+                    for _, photo_id in batch
+                ]
+                
                 try:
-                    is_me = " (вы)" if nickname == callback.from_user.username else ""
-                    await callback.message.answer_photo(
-                        photo=photo_id,
-                        caption=f"#{i} {nickname}{is_me}",
-                        parse_mode="Markdown"
-                    )
-                    await asyncio.sleep(0.5)  # Пауза чтобы не спамить
+                    await callback.message.answer_media_group(media=media_group)
                 except Exception as e:
-                    logging.error(f"Failed to send photo for {nickname}: {e}")
-                    await callback.message.answer(f"📷 {nickname} (фото недоступно)")
-            else:
-                await callback.message.answer(f"👤 #{i} {nickname} (без фото)")
+                    logging.error(f"Failed to send media group: {e}")
+                    # Если не получилось альбомом, отправляем по одному
+                    for nickname, photo_id in batch:
+                        try:
+                            await callback.message.answer_photo(photo=photo_id)
+                        except:
+                            pass
 
 @dp.callback_query(F.data.startswith("register_"))
 async def register_event(callback: types.CallbackQuery):
@@ -129,22 +134,21 @@ async def register_event(callback: types.CallbackQuery):
             reply_markup=get_registered_keyboard(event_id)
         )
         
-        # Отправляем фото всех участников
-        for i, (nickname, photo_id) in enumerate(participants, 1):
-            if photo_id:
+        # Отправляем фото альбомом
+        photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
+        
+        if photos_with_ids:
+            for i in range(0, len(photos_with_ids), 10):
+                batch = photos_with_ids[i:i+10]
+                media_group = [
+                    InputMediaPhoto(media=photo_id)
+                    for _, photo_id in batch
+                ]
+                
                 try:
-                    is_me = " (вы)" if nickname == callback.from_user.username else ""
-                    await callback.message.answer_photo(
-                        photo=photo_id,
-                        caption=f"#{i} {nickname}{is_me}",
-                        parse_mode="Markdown"
-                    )
-                    await asyncio.sleep(0.5)
+                    await callback.message.answer_media_group(media=media_group)
                 except Exception as e:
-                    logging.error(f"Failed to send photo for {nickname}: {e}")
-                    await callback.message.answer(f"📷 {nickname} (фото недоступно)")
-            else:
-                await callback.message.answer(f"👤 #{i} {nickname} (без фото)")
+                    logging.error(f"Failed to send media group: {e}")
     else:
         await callback.answer("Вы уже записаны.", show_alert=True)
 
@@ -172,23 +176,21 @@ async def unregister_event(callback: types.CallbackQuery):
         reply_markup=get_register_keyboard(event_id)
     )
     
-    # Отправляем фото всех участников
-    if participants:
-        for i, (nickname, photo_id) in enumerate(participants, 1):
-            if photo_id:
-                try:
-                    is_me = " (вы)" if nickname == callback.from_user.username else ""
-                    await callback.message.answer_photo(
-                        photo=photo_id,
-                        caption=f"#{i} {nickname}{is_me}",
-                        parse_mode="Markdown"
-                    )
-                    await asyncio.sleep(0.5)
-                except Exception as e:
-                    logging.error(f"Failed to send photo for {nickname}: {e}")
-                    await callback.message.answer(f"📷 {nickname} (фото недоступно)")
-            else:
-                await callback.message.answer(f"👤 #{i} {nickname} (без фото)")
+    # Отправляем фото альбомом
+    photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
+    
+    if photos_with_ids:
+        for i in range(0, len(photos_with_ids), 10):
+            batch = photos_with_ids[i:i+10]
+            media_group = [
+                InputMediaPhoto(media=photo_id)
+                for _, photo_id in batch
+            ]
+            
+            try:
+                await callback.message.answer_media_group(media=media_group)
+            except Exception as e:
+                logging.error(f"Failed to send media group: {e}")
 
 @dp.callback_query(F.data == "back")
 async def go_back(callback: types.CallbackQuery):
