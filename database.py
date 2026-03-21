@@ -1,9 +1,9 @@
 import aiosqlite
-from datetime import datetime
 
 async def init_db():
     """Создаёт таблицы при первом запуске"""
     async with aiosqlite.connect("events.db") as db:
+        # Таблица профилей
         await db.execute('''
         CREATE TABLE IF NOT EXISTS profiles (
             user_id INTEGER PRIMARY KEY,
@@ -12,6 +12,8 @@ async def init_db():
             photo_id TEXT
         )
         ''')
+        
+        # Таблица регистраций
         await db.execute('''
         CREATE TABLE IF NOT EXISTS registrations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,7 +22,8 @@ async def init_db():
             UNIQUE(user_id, event_id)
         )
         ''')
-        # Новая таблица для мероприятий
+        
+        # Таблица мероприятий (НОВАЯ)
         await db.execute('''
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,6 +34,7 @@ async def init_db():
             is_active INTEGER DEFAULT 1
         )
         ''')
+        
         await db.commit()
 
 async def save_profile(user_id: int, username: str, nickname: str, photo_id: str):
@@ -111,7 +115,7 @@ async def get_all_event_counts():
         result = await cursor.fetchall()
         return {row[0]: row[1] for row in result}
 
-# === НОВЫЕ ФУНКЦИИ ДЛЯ МЕРОПРИЯТИЙ ===
+# === НОВЫЕ ФУНКЦИИ ДЛЯ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ ===
 
 async def create_event(name: str, date: str, time: str):
     """Создаёт новое мероприятие"""
