@@ -7,7 +7,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 dp = Dispatcher(storage=MemoryStorage())
 
-from database import save_profile, get_user_profile, register_for_event, check_user_registration, unregister_user
+from database import save_profile, get_user_profile, register_for_event, check_user_registration, unregister_from_event, get_event_participants
 from keyboards import EVENTS, get_events_keyboard, get_confirm_keyboard, get_main_menu_keyboard, get_cancel_keyboard
 
 class ProfileSetup(StatesGroup):
@@ -88,8 +88,15 @@ async def confirm_registration(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "cancel")
 async def cancel_registration(callback: types.CallbackQuery):
-    await unregister_user(callback.from_user.id)
-    await callback.message.edit_text("Запись отменена", reply_markup=get_events_keyboard())
+    """Отмена записи"""
+    registered = await check_user_registration(callback.from_user.id)
+    if registered:
+        event_id = registered[0] if isinstance(registered, list) else registered
+        await unregister_from_event(callback.from_user.id, event_id)
+    await callback.message.edit_text(
+        "❌ Ваша запись отменена.\n\nВыберите новое мероприятие:",
+        reply_markup=get_events_keyboard()
+    )
 
 @dp.callback_query(F.data == "back")
 async def go_back(callback: types.CallbackQuery):
