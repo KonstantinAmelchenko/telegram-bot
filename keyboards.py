@@ -40,11 +40,11 @@ def get_participants_keyboard(event_id: int):
     ])
 
 def get_profile_keyboard():
+    """Без кнопки Назад"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✏️ Изменить ник", callback_data="edit_nickname")],
         [InlineKeyboardButton(text="📷 Изменить фото", callback_data="edit_photo")],
-        [InlineKeyboardButton(text="📋 Мероприятия", callback_data="show_events")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="back")]
+        [InlineKeyboardButton(text="📋 Мероприятия", callback_data="show_events")]
     ])
 
 def get_main_menu_keyboard():

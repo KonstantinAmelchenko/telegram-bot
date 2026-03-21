@@ -4,7 +4,12 @@ from aiogram.fsm.state import State, StatesGroup
 from . import dp
 
 from database import save_profile, get_user_profile
-from keyboards import get_profile_keyboard, get_main_menu_keyboard, get_cancel_keyboard, get_skip_keyboard
+from keyboards import (
+    get_profile_keyboard,
+    get_main_menu_keyboard,
+    get_cancel_keyboard,
+    get_skip_keyboard
+)
 
 class ProfileSetup(StatesGroup):
     waiting_for_nickname = State()
