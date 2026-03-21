@@ -24,7 +24,6 @@ from .profile import ProfileSetup
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
-    """Команда /start"""
     await state.clear()
     profile = await get_user_profile(message.from_user.id)
     if profile and profile[0]:
@@ -42,7 +41,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
 @dp.message(Command("events"))
 async def cmd_events(message: types.Message, state: FSMContext):
-    """Команда /events - доступна всегда"""
     await state.clear()
     profile = await get_user_profile(message.from_user.id)
     if profile and profile[0]:
@@ -61,12 +59,10 @@ async def cmd_events(message: types.Message, state: FSMContext):
 
 @dp.message(F.text == "📋 Мероприятия")
 async def btn_menu(message: types.Message, state: FSMContext):
-    """Кнопка меню в чате"""
     await cmd_events(message, state)
 
 @dp.callback_query(F.data.startswith("event_"))
 async def select_event(callback: types.CallbackQuery):
-    """Выбор мероприятия"""
     event_id = int(callback.data.split("_")[1])
     event_name = EVENTS.get(event_id)
     registered = await check_user_registration(callback.from_user.id, event_id)
@@ -86,7 +82,6 @@ async def select_event(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("confirm_"))
 async def confirm_registration(callback: types.CallbackQuery):
-    """Подтверждение записи"""
     event_id = int(callback.data.split("_")[1])
     event_name = EVENTS.get(event_id)
     success = await register_for_event(callback.from_user.id, event_id)
@@ -101,7 +96,6 @@ async def confirm_registration(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("unregister_"))
 async def unregister_event(callback: types.CallbackQuery):
-    """Отмена записи на конкретное мероприятие"""
     event_id = int(callback.data.split("_")[1])
     event_name = EVENTS.get(event_id)
     await unregister_from_event(callback.from_user.id, event_id)
@@ -113,7 +107,6 @@ async def unregister_event(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data.startswith("participants_"))
 async def show_participants(callback: types.CallbackQuery):
-    """Список участников"""
     event_id = int(callback.data.split("_")[1])
     event_name = EVENTS.get(event_id)
     participants = await get_event_participants(event_id)
@@ -137,7 +130,6 @@ async def show_participants(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "back")
 async def go_back(callback: types.CallbackQuery):
-    """Назад к афише"""
     registrations = await check_user_registration(callback.from_user.id)
     await callback.message.edit_text(
         "📋 Афиша\n\nВыберите мероприятие:",
@@ -145,9 +137,8 @@ async def go_back(callback: types.CallbackQuery):
         reply_markup=get_events_keyboard(registrations)
     )
 
-@dp.callback_query(F.data == "show_events")
+@dp.callback_query(F.data == "show_events")  # ← Обработчик для кнопки из профиля
 async def show_events(callback: types.CallbackQuery):
-    """Кнопка Мероприятия из профиля"""
     registrations = await check_user_registration(callback.from_user.id)
     await callback.message.edit_text(
         "📋 **Мероприятия**\n\nВыберите мероприятие:",
