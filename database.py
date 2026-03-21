@@ -4,20 +4,20 @@ async def init_db():
     """Создаёт таблицы при первом запуске"""
     async with aiosqlite.connect("events.db") as db:
         await db.execute('''
-            CREATE TABLE IF NOT EXISTS profiles (
-                user_id INTEGER PRIMARY KEY,
-                username TEXT,
-                nickname TEXT,
-                photo_id TEXT
-            )
+        CREATE TABLE IF NOT EXISTS profiles (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            nickname TEXT,
+            photo_id TEXT
+        )
         ''')
         await db.execute('''
-            CREATE TABLE IF NOT EXISTS registrations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                event_id INTEGER,
-                UNIQUE(user_id, event_id)
-            )
+        CREATE TABLE IF NOT EXISTS registrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            event_id INTEGER,
+            UNIQUE(user_id, event_id)
+        )
         ''')
         await db.commit()
 
@@ -77,9 +77,9 @@ async def unregister_from_event(user_id: int, event_id: int):
 async def get_event_participants(event_id: int):
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute('''
-            SELECT p.nickname, p.photo_id
-            FROM registrations r
-            JOIN profiles p ON r.user_id = p.user_id
-            WHERE r.event_id = ?
+        SELECT p.nickname, p.photo_id
+        FROM registrations r
+        JOIN profiles p ON r.user_id = p.user_id
+        WHERE r.event_id = ?
         ''', (event_id,))
         return await cursor.fetchall()

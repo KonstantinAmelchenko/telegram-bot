@@ -2,7 +2,6 @@ from aiogram import types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from . import dp
-
 from database import save_profile, get_user_profile
 from keyboards import (
     get_profile_keyboard,
@@ -23,7 +22,6 @@ async def btn_profile(message: types.Message, state: FSMContext):
     profile = await get_user_profile(message.from_user.id)
     if profile and profile[0]:
         text = f"Никнейм: {profile[0]}"
-        
         if profile[1]:
             try:
                 await message.answer_photo(
@@ -64,7 +62,6 @@ async def process_nickname(message: types.Message, state: FSMContext):
     if len(nickname) < 2 or len(nickname) > 20:
         await message.answer("Ник должен быть от 2 до 20 символов. Попробуй ещё раз:")
         return
-
     await state.update_data(nickname=nickname)
     await message.answer(
         f"Отлично! Твой ник: **{nickname}**\n\n"
@@ -90,14 +87,11 @@ async def process_photo(message: types.Message, state: FSMContext):
     if not message.photo:
         await message.answer("Это не фото! Отправь пожалуйста фотографию (или напиши '⏭️ Пропустить'):")
         return
-
     photo_id = message.photo[-1].file_id
     data = await state.get_data()
     nickname = data.get("nickname", message.from_user.username)
-
     await save_profile(message.from_user.id, message.from_user.username, nickname, photo_id)
     await state.clear()
-
     await message.answer(
         f"✅ Профиль готов!\n\nНик: {nickname}",
         reply_markup=get_events_keyboard()
@@ -109,7 +103,6 @@ async def show_profile(callback: types.CallbackQuery):
     profile = await get_user_profile(callback.from_user.id)
     if profile and profile[0]:
         text = f"Никнейм: {profile[0]}"
-        
         if profile[1]:
             try:
                 await callback.message.answer_photo(

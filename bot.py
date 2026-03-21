@@ -6,6 +6,7 @@ from database import init_db
 from handlers import dp
 
 logging.basicConfig(level=logging.INFO)
+
 bot = Bot(token=BOT_TOKEN)
 
 async def main():

@@ -10,7 +10,6 @@ EVENTS = {
 def get_events_keyboard(user_registrations: list = None):
     if user_registrations is None:
         user_registrations = []
-    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     for event_id, event_name in EVENTS.items():
         status = " ✅" if event_id in user_registrations else ""

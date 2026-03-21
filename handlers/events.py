@@ -3,7 +3,6 @@ from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from . import dp
-
 from database import (
     get_user_profile,
     register_for_event,
@@ -21,6 +20,9 @@ from keyboards import (
     get_cancel_keyboard
 )
 from .profile import ProfileSetup
+import logging
+
+logger = logging.getLogger(__name__)
 
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
@@ -46,7 +48,7 @@ async def cmd_events(message: types.Message, state: FSMContext):
     if profile and profile[0]:
         registrations = await check_user_registration(message.from_user.id)
         await message.answer(
-            "📋 **Мероприятия**\n\nВыберите мероприятие:",
+            "📋 Мероприятия\n\nВыберите мероприятие:",
             parse_mode="Markdown",
             reply_markup=get_events_keyboard(registrations)
         )
@@ -66,7 +68,6 @@ async def select_event(callback: types.CallbackQuery):
     event_id = int(callback.data.split("_")[1])
     event_name = EVENTS.get(event_id)
     registered = await check_user_registration(callback.from_user.id, event_id)
-    
     if registered:
         await callback.message.edit_text(
             f"📅 **{event_name}**\n\n✅ Вы уже записаны!",
@@ -79,6 +80,7 @@ async def select_event(callback: types.CallbackQuery):
             parse_mode="Markdown",
             reply_markup=get_confirm_keyboard(event_id)
         )
+    await callback.answer()
 
 @dp.callback_query(F.data.startswith("confirm_"))
 async def confirm_registration(callback: types.CallbackQuery):
@@ -87,7 +89,7 @@ async def confirm_registration(callback: types.CallbackQuery):
     success = await register_for_event(callback.from_user.id, event_id)
     if success:
         await callback.message.edit_text(
-            f"✅ **Записаны!**\n\nМероприятие: {event_name}",
+            f"✅ Записаны!\n\nМероприятие: {event_name}",
             parse_mode="Markdown",
             reply_markup=get_participants_keyboard(event_id)
         )
@@ -100,17 +102,17 @@ async def unregister_event(callback: types.CallbackQuery):
     event_name = EVENTS.get(event_id)
     await unregister_from_event(callback.from_user.id, event_id)
     await callback.message.edit_text(
-        f"❌ **Отменено**\n\nМероприятие: {event_name}",
+        f"❌ Отменено\n\nМероприятие: {event_name}",
         parse_mode="Markdown",
         reply_markup=get_events_keyboard(await check_user_registration(callback.from_user.id))
     )
+    await callback.answer()
 
 @dp.callback_query(F.data.startswith("participants_"))
 async def show_participants(callback: types.CallbackQuery):
     event_id = int(callback.data.split("_")[1])
     event_name = EVENTS.get(event_id)
     participants = await get_event_participants(event_id)
-    
     if participants:
         text = f"👥 **Участники: {event_name}**\n\n"
         text += f"**Всего: {len(participants)}**\n\n"
@@ -127,6 +129,7 @@ async def show_participants(callback: types.CallbackQuery):
             parse_mode="Markdown",
             reply_markup=get_participants_keyboard(event_id)
         )
+    await callback.answer()
 
 @dp.callback_query(F.data == "back")
 async def go_back(callback: types.CallbackQuery):
@@ -136,12 +139,19 @@ async def go_back(callback: types.CallbackQuery):
         parse_mode="Markdown",
         reply_markup=get_events_keyboard(registrations)
     )
+    await callback.answer()
 
-@dp.callback_query(F.data == "show_events")  # ← Обработчик для кнопки из профиля
+@dp.callback_query(F.data == "show_events")
 async def show_events(callback: types.CallbackQuery):
-    registrations = await check_user_registration(callback.from_user.id)
-    await callback.message.edit_text(
-        "📋 **Мероприятия**\n\nВыберите мероприятие:",
-        parse_mode="Markdown",
-        reply_markup=get_events_keyboard(registrations)
-    )
+    """Обработчик для кнопки 'Мероприятия' из профиля"""
+    try:
+        registrations = await check_user_registration(callback.from_user.id)
+        await callback.message.edit_text(
+            "📋 Мероприятия\n\nВыберите мероприятие:",
+            parse_mode="Markdown",
+            reply_markup=get_events_keyboard(registrations)
+        )
+        await callback.answer()
+    except Exception as e:
+        logger.error(f"show_events error: {e}")
+        await callback.answer("Ошибка при обновлении", show_alert=True)
