@@ -37,7 +37,6 @@ class ProfileSetup(StatesGroup):
     waiting_for_photo = State()
 
 # ==================== ХЕНДЛЕРЫ ====================
-
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
     """Команда /start"""
