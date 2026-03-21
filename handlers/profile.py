@@ -2,8 +2,7 @@ from aiogram import types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from . import dp
-
-from database import save_profile, get_user_profile, check_user_registration, get_all_event_counts
+from database import save_profile, get_user_profile, check_user_registration, get_all_event_counts, get_all_events
 from keyboards import (
     get_profile_keyboard,
     get_main_menu_keyboard,
@@ -24,7 +23,6 @@ async def btn_profile(message: types.Message, state: FSMContext):
     profile = await get_user_profile(message.from_user.id)
     if profile and profile[0]:
         text = f"Никнейм: {profile[0]}"
-        
         if profile[1]:
             try:
                 await message.answer_photo(
@@ -63,7 +61,7 @@ async def process_nickname(message: types.Message, state: FSMContext):
         return
     await state.update_data(nickname=nickname)
     await message.answer(
-        f"Отлично! Ник: **{nickname}**\n\nОтправь фото или '⏭️ Пропустить':",
+        f"Отлично! Ник: {nickname}\n\nОтправь фото или '⏭️ Пропустить':",
         parse_mode="Markdown",
         reply_markup=get_skip_keyboard()
     )
@@ -79,13 +77,12 @@ async def process_edit_nickname(message: types.Message, state: FSMContext):
     if len(nickname) < 2 or len(nickname) > 20:
         await message.answer("Ник от 2 до 20 символов:")
         return
-    
     profile = await get_user_profile(message.from_user.id)
     old_photo_id = profile[1] if profile else None
-    
+
     await save_profile(message.from_user.id, message.from_user.username, nickname, old_photo_id)
     await state.clear()
-    
+
     await message.answer(
         f"✅ Ник изменён!\n\nНик: {nickname}",
         reply_markup=get_profile_keyboard()
@@ -98,7 +95,7 @@ async def process_photo(message: types.Message, state: FSMContext):
         nickname = data.get("nickname", message.from_user.username)
         await save_profile(message.from_user.id, message.from_user.username, nickname, None)
         await state.clear()
-        await message.answer("✅ Профиль готов!", reply_markup=get_events_keyboard())
+        await message.answer("✅ Профиль готов!", reply_markup=get_main_menu_keyboard())
         return
     if not message.photo:
         await message.answer("Это не фото! Отправь фотографию:")
@@ -108,7 +105,7 @@ async def process_photo(message: types.Message, state: FSMContext):
     nickname = data.get("nickname", message.from_user.username)
     await save_profile(message.from_user.id, message.from_user.username, nickname, photo_id)
     await state.clear()
-    await message.answer(f"✅ Профиль готов!\n\nНик: {nickname}", reply_markup=get_events_keyboard())
+    await message.answer(f"✅ Профиль готов!\n\nНик: {nickname}", reply_markup=get_main_menu_keyboard())
 
 @dp.message(ProfileSetup.editing_photo)
 async def process_edit_photo(message: types.Message, state: FSMContext):
@@ -119,15 +116,14 @@ async def process_edit_photo(message: types.Message, state: FSMContext):
     if not message.photo:
         await message.answer("Это не фото! Отправь фотографию:")
         return
-    
     profile = await get_user_profile(message.from_user.id)
     old_nickname = profile[0] if profile else message.from_user.username
-    
+
     photo_id = message.photo[-1].file_id
-    
+
     await save_profile(message.from_user.id, message.from_user.username, old_nickname, photo_id)
     await state.clear()
-    
+
     await message.answer(
         f"✅ Фото изменено!\n\nНик: {old_nickname}",
         reply_markup=get_profile_keyboard()
@@ -138,7 +134,6 @@ async def show_profile(callback: types.CallbackQuery):
     profile = await get_user_profile(callback.from_user.id)
     if profile and profile[0]:
         text = f"Никнейм: {profile[0]}"
-        
         if profile[1]:
             try:
                 await callback.message.answer_photo(
@@ -181,11 +176,10 @@ async def edit_photo(callback: types.CallbackQuery, state: FSMContext):
 async def show_events_from_profile(callback: types.CallbackQuery):
     registrations = await check_user_registration(callback.from_user.id)
     event_counts = await get_all_event_counts()
-    
+    events = await get_all_events()  # ✅ ДОБАВЛЕНО!
     await callback.message.answer(
         "📋 **Мероприятия**\n\nВыберите мероприятие:",
         parse_mode="Markdown",
-        reply_markup=get_events_keyboard(registrations, event_counts)
+        reply_markup=get_events_keyboard(registrations, event_counts, events)  # ✅ 3 АРГУМЕНТА!
     )
-    
     await callback.answer()
