@@ -15,7 +15,6 @@ from keyboards import (
     get_events_keyboard,
     get_register_keyboard,
     get_registered_keyboard,
-    get_participants_keyboard,
     get_main_menu_keyboard,
     get_cancel_keyboard
 )
@@ -68,7 +67,6 @@ async def select_event(callback: types.CallbackQuery):
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
     
-    # Формируем текст со списком участников
     if participants:
         text = f"📅 **{event_name}**\n\n"
         text += f"**Участников: {len(participants)}**\n\n"
@@ -81,7 +79,6 @@ async def select_event(callback: types.CallbackQuery):
         text += "**Участников: 0**\n\n"
         text += "Пока никого нет. Будьте первым!"
     
-    # Выбираем клавиатуру в зависимости от статуса
     if registered:
         keyboard = get_registered_keyboard(event_id)
     else:
@@ -101,7 +98,6 @@ async def register_event(callback: types.CallbackQuery):
     success = await register_for_event(callback.from_user.id, event_id)
     
     if success:
-        # Обновляем сообщение с новым списком
         participants = await get_event_participants(event_id)
         text = f"📅 **{event_name}**\n\n"
         text += f"**Участников: {len(participants)}**\n\n"
@@ -125,7 +121,6 @@ async def unregister_event(callback: types.CallbackQuery):
     event_name = EVENTS.get(event_id)
     await unregister_from_event(callback.from_user.id, event_id)
     
-    # Обновляем сообщение с новым списком
     participants = await get_event_participants(event_id)
     if participants:
         text = f"📅 **{event_name}**\n\n"
