@@ -1,4 +1,5 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from database import get_day_of_week  # <-- Импортируем функцию
 
 def get_events_keyboard(user_registrations: list = None, event_counts: dict = None, events: list = None):
     if user_registrations is None:
@@ -13,7 +14,9 @@ def get_events_keyboard(user_registrations: list = None, event_counts: dict = No
     for event_id, event_name, event_date, event_time in events:
         status = " ✅" if event_id in user_registrations else ""
         count = event_counts.get(event_id, 0)
-        event_text = f"{event_name} | {event_date} {event_time}{status} 👥 {count}"
+        day_of_week = get_day_of_week(event_date)  # <-- Получаем день недели
+        # Формируем текст: Название | День Дата Время ✅ 👥 N
+        event_text = f"{event_name} | {day_of_week} {event_date} {event_time}{status} 👥 {count}"
         
         keyboard.inline_keyboard.append([
             InlineKeyboardButton(text=event_text, callback_data=f"event_{event_id}")

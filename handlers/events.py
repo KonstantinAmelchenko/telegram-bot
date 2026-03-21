@@ -12,7 +12,8 @@ from database import (
     get_event_participants,
     get_all_event_counts,
     get_all_events,
-    get_event_by_id
+    get_event_by_id,
+    get_day_of_week  # <-- Импортируем функцию
 )
 from keyboards import (
     get_events_keyboard,
@@ -76,12 +77,13 @@ async def select_event(callback: types.CallbackQuery):
         return
 
     _, event_name, event_date, event_time = event
+    day_of_week = get_day_of_week(event_date)  # <-- Получаем день недели
     
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
     
     text = f"📅 **{event_name}**\n"
-    text += f"🗓 **Дата:** {event_date}\n"
+    text += f"🗓 **Дата:** {day_of_week}, {event_date}\n"  # <-- Добавляем день недели
     text += f"⏰ **Время:** {event_time}\n\n"
     
     if participants:

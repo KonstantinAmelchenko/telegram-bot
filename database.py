@@ -1,5 +1,16 @@
 import aiosqlite
+from datetime import datetime
 
+def get_day_of_week(date_str: str) -> str:
+    """Возвращает день недели для даты в формате DD.MM.YYYY"""
+    try:
+        day, month, year = map(int, date_str.split('.'))
+        date = datetime(year, month, day)
+        days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
+        return days[date.weekday()]
+    except:
+        return ""
+    
 async def init_db():
     """Создаёт таблицы при первом запуске"""
     async with aiosqlite.connect("events.db") as db:
