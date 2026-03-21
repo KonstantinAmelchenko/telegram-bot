@@ -5,7 +5,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import BOT_TOKEN
 from database import init_db
-from handlers import dp  # Импортируем dp из handlers.py
+from handlers import dp
 
 # ==================== НАСТРОЙКИ ====================
 logging.basicConfig(level=logging.INFO)

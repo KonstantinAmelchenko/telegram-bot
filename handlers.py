@@ -246,7 +246,6 @@ async def show_participants(callback: types.CallbackQuery):
     if participants:
         text = f"👥 **Участники: {event_name}**\n\n"
         text += f"**Всего участников: {len(participants)}**\n\n"
-        
         text += "**Список участников:**\n"
         for i, (nickname, photo_id) in enumerate(participants, 1):
             text += f"{i}. {nickname}\n"
