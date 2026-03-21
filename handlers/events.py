@@ -1,6 +1,8 @@
 from aiogram import types, F
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
+import asyncio
+import logging
 from . import dp
 
 from database import (
@@ -61,7 +63,7 @@ async def btn_menu(message: types.Message, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("event_"))
 async def select_event(callback: types.CallbackQuery):
-    """Показывает мероприятие со списком участников сразу"""
+    """Показывает мероприятие со списком участников и их фото"""
     event_id = int(callback.data.split("_")[1])
     event_name = EVENTS.get(event_id)
     registered = await check_user_registration(callback.from_user.id, event_id)
@@ -69,14 +71,12 @@ async def select_event(callback: types.CallbackQuery):
     
     if participants:
         text = f"📅 **{event_name}**\n\n"
-        text += f"**Участников: {len(participants)}**\n\n"
         text += "**Список участников:**\n"
         for i, (nickname, photo_id) in enumerate(participants, 1):
             is_me = " (вы)" if nickname == callback.from_user.username else ""
             text += f"{i}. {nickname}{is_me}\n"
     else:
         text = f"📅 **{event_name}**\n\n"
-        text += "**Участников: 0**\n\n"
         text += "Пока никого нет. Будьте первым!"
     
     if registered:
@@ -89,6 +89,24 @@ async def select_event(callback: types.CallbackQuery):
         parse_mode="Markdown",
         reply_markup=keyboard
     )
+    
+    # Отправляем фото всех участников
+    if participants:
+        for i, (nickname, photo_id) in enumerate(participants, 1):
+            if photo_id:
+                try:
+                    is_me = " (вы)" if nickname == callback.from_user.username else ""
+                    await callback.message.answer_photo(
+                        photo=photo_id,
+                        caption=f"#{i} {nickname}{is_me}",
+                        parse_mode="Markdown"
+                    )
+                    await asyncio.sleep(0.5)  # Пауза чтобы не спамить
+                except Exception as e:
+                    logging.error(f"Failed to send photo for {nickname}: {e}")
+                    await callback.message.answer(f"📷 {nickname} (фото недоступно)")
+            else:
+                await callback.message.answer(f"👤 #{i} {nickname} (без фото)")
 
 @dp.callback_query(F.data.startswith("register_"))
 async def register_event(callback: types.CallbackQuery):
@@ -100,7 +118,6 @@ async def register_event(callback: types.CallbackQuery):
     if success:
         participants = await get_event_participants(event_id)
         text = f"📅 **{event_name}**\n\n"
-        text += f"**Участников: {len(participants)}**\n\n"
         text += "**Список участников:**\n"
         for i, (nickname, photo_id) in enumerate(participants, 1):
             is_me = " (вы)" if nickname == callback.from_user.username else ""
@@ -111,6 +128,23 @@ async def register_event(callback: types.CallbackQuery):
             parse_mode="Markdown",
             reply_markup=get_registered_keyboard(event_id)
         )
+        
+        # Отправляем фото всех участников
+        for i, (nickname, photo_id) in enumerate(participants, 1):
+            if photo_id:
+                try:
+                    is_me = " (вы)" if nickname == callback.from_user.username else ""
+                    await callback.message.answer_photo(
+                        photo=photo_id,
+                        caption=f"#{i} {nickname}{is_me}",
+                        parse_mode="Markdown"
+                    )
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    logging.error(f"Failed to send photo for {nickname}: {e}")
+                    await callback.message.answer(f"📷 {nickname} (фото недоступно)")
+            else:
+                await callback.message.answer(f"👤 #{i} {nickname} (без фото)")
     else:
         await callback.answer("Вы уже записаны.", show_alert=True)
 
@@ -124,14 +158,12 @@ async def unregister_event(callback: types.CallbackQuery):
     participants = await get_event_participants(event_id)
     if participants:
         text = f"📅 **{event_name}**\n\n"
-        text += f"**Участников: {len(participants)}**\n\n"
         text += "**Список участников:**\n"
         for i, (nickname, photo_id) in enumerate(participants, 1):
             is_me = " (вы)" if nickname == callback.from_user.username else ""
             text += f"{i}. {nickname}{is_me}\n"
     else:
         text = f"📅 **{event_name}**\n\n"
-        text += "**Участников: 0**\n\n"
         text += "Пока никого нет. Будьте первым!"
     
     await callback.message.edit_text(
@@ -139,6 +171,24 @@ async def unregister_event(callback: types.CallbackQuery):
         parse_mode="Markdown",
         reply_markup=get_register_keyboard(event_id)
     )
+    
+    # Отправляем фото всех участников
+    if participants:
+        for i, (nickname, photo_id) in enumerate(participants, 1):
+            if photo_id:
+                try:
+                    is_me = " (вы)" if nickname == callback.from_user.username else ""
+                    await callback.message.answer_photo(
+                        photo=photo_id,
+                        caption=f"#{i} {nickname}{is_me}",
+                        parse_mode="Markdown"
+                    )
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    logging.error(f"Failed to send photo for {nickname}: {e}")
+                    await callback.message.answer(f"📷 {nickname} (фото недоступно)")
+            else:
+                await callback.message.answer(f"👤 #{i} {nickname} (без фото)")
 
 @dp.callback_query(F.data == "back")
 async def go_back(callback: types.CallbackQuery):
