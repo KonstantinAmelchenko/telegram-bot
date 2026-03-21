@@ -1,14 +1,13 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 EVENTS = {
-    1: "🎨 Мастер-класс по рисованию",
-    2: "🏃 Забег в парке",
-    3: "📚 Книжный клуб",
-    4: "🎮 Игровой вечер"
+    1: "🎨 Рисование",
+    2: "🏃 Забег",
+    3: "📚 Книги",
+    4: "🎮 Игры"
 }
 
 def get_events_keyboard(user_registrations: list = None):
-    """Клавиатура со списком мероприятий"""
     if user_registrations is None:
         user_registrations = []
     
@@ -22,14 +21,12 @@ def get_events_keyboard(user_registrations: list = None):
     return keyboard
 
 def get_confirm_keyboard(event_id: int):
-    """Клавиатура подтверждения записи"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"confirm_{event_id}")],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="back")]
     ])
 
 def get_registered_keyboard(event_id: int):
-    """Клавиатура для уже записанных"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👥 Участники", callback_data=f"participants_{event_id}")],
         [InlineKeyboardButton(text="❌ Отменить запись", callback_data=f"unregister_{event_id}")],
@@ -37,14 +34,12 @@ def get_registered_keyboard(event_id: int):
     ])
 
 def get_participants_keyboard(event_id: int):
-    """Клавиатура просмотра участников"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❌ Отменить запись", callback_data=f"unregister_{event_id}")],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="back")]
     ])
 
 def get_profile_keyboard():
-    """Клавиатура профиля"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✏️ Изменить ник", callback_data="edit_nickname")],
         [InlineKeyboardButton(text="📷 Изменить фото", callback_data="edit_photo")],
@@ -53,20 +48,17 @@ def get_profile_keyboard():
     ])
 
 def get_main_menu_keyboard():
-    """Основное меню с кнопками в чате"""
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text="📋 Мероприятия")],
         [KeyboardButton(text="👤 Профиль")]
     ], resize_keyboard=True)
 
 def get_cancel_keyboard():
-    """Клавиатура отмены"""
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text="❌ Отмена")]
     ], resize_keyboard=True)
 
 def get_skip_keyboard():
-    """Клавиатура пропуска шага"""
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text="⏭️ Пропустить")]
     ], resize_keyboard=True)
