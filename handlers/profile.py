@@ -8,7 +8,8 @@ from keyboards import (
     get_profile_keyboard,
     get_main_menu_keyboard,
     get_cancel_keyboard,
-    get_skip_keyboard
+    get_skip_keyboard,
+    get_events_keyboard
 )
 
 class ProfileSetup(StatesGroup):
@@ -21,9 +22,7 @@ async def btn_profile(message: types.Message, state: FSMContext):
     await state.clear()
     profile = await get_user_profile(message.from_user.id)
     if profile and profile[0]:
-        text = f"👤 **Ваш профиль**\n\n"
-        text += f"Никнейм: {profile[0]}\n"
-        text += f"Фото: {'✅ Загружено' if profile[1] else '❌ Не загружено'}\n\n"
+        text = f"Никнейм: {profile[0]}"
         
         if profile[1]:
             try:
@@ -35,7 +34,7 @@ async def btn_profile(message: types.Message, state: FSMContext):
                 )
             except Exception:
                 await message.answer(
-                    text + "⚠️ Фото устарело, загрузите новое.",
+                    text + "\n⚠️ Фото устарело, загрузите новое.",
                     parse_mode="Markdown",
                     reply_markup=get_profile_keyboard()
                 )
@@ -84,8 +83,8 @@ async def process_photo(message: types.Message, state: FSMContext):
         await save_profile(message.from_user.id, message.from_user.username, nickname, None)
         await state.clear()
         await message.answer(
-            "Профиль создан! Теперь выберите мероприятие: /events",
-            reply_markup=get_main_menu_keyboard()
+            "✅ Профиль готов!",
+            reply_markup=get_events_keyboard()
         )
         return
     if not message.photo:
@@ -100,8 +99,8 @@ async def process_photo(message: types.Message, state: FSMContext):
     await state.clear()
 
     await message.answer(
-        f"✅ Профиль готов!\n\nНик: {nickname}\n\nТеперь выберите мероприятие: /events",
-        reply_markup=get_main_menu_keyboard()
+        f"✅ Профиль готов!\n\nНик: {nickname}",
+        reply_markup=get_events_keyboard()
     )
 
 @dp.callback_query(F.data == "profile")
@@ -109,9 +108,7 @@ async def show_profile(callback: types.CallbackQuery):
     """Показ профиля (inline)"""
     profile = await get_user_profile(callback.from_user.id)
     if profile and profile[0]:
-        text = f"👤 **Ваш профиль**\n\n"
-        text += f"Никнейм: {profile[0]}\n"
-        text += f"Фото: {'✅ Загружено' if profile[1] else '❌ Не загружено'}\n\n"
+        text = f"Никнейм: {profile[0]}"
         
         if profile[1]:
             try:
@@ -123,7 +120,7 @@ async def show_profile(callback: types.CallbackQuery):
                 )
             except Exception:
                 await callback.message.answer(
-                    text + "⚠️ Фото устарело, загрузите новое.",
+                    text + "\n⚠️ Фото устарело, загрузите новое.",
                     parse_mode="Markdown",
                     reply_markup=get_profile_keyboard()
                 )
