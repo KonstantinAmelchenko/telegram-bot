@@ -5,9 +5,11 @@ from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram import Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 
-# Импортируем dp из bot.py
-from bot import dp
+# ✅ СОЗДАЁМ dp ЗДЕСЬ:
+dp = Dispatcher(storage=MemoryStorage())
 
 from config import ADMIN_ID
 from database import (

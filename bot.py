@@ -1,20 +1,15 @@
 import asyncio
 import logging
-
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from config import BOT_TOKEN
 from database import init_db
+from handlers import dp  # Импортируем dp из handlers.py
 
 # ==================== НАСТРОЙКИ ====================
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(storage=MemoryStorage())
-
-# ==================== ИМПОРТ ХЕНДЛЕРОВ ====================
-# Импортируем после создания dp, чтобы хендлеры зарегистрировались
-import handlers  # noqa: F401
 
 # ==================== ЗАПУСК ====================
 async def main():
