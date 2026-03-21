@@ -2,6 +2,7 @@ from aiogram import types, F
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InputMediaPhoto
+import logging
 from . import dp
 
 from database import (
@@ -9,7 +10,8 @@ from database import (
     register_for_event,
     check_user_registration,
     unregister_from_event,
-    get_event_participants
+    get_event_participants,
+    get_all_event_counts
 )
 from keyboards import (
     EVENTS,
@@ -27,9 +29,10 @@ async def cmd_start(message: types.Message, state: FSMContext):
     profile = await get_user_profile(message.from_user.id)
     if profile and profile[0]:
         registrations = await check_user_registration(message.from_user.id)
+        event_counts = await get_all_event_counts()
         await message.answer(
             f"👋 Привет, {profile[0]}!",
-            reply_markup=get_events_keyboard(registrations)
+            reply_markup=get_events_keyboard(registrations, event_counts)
         )
     else:
         await message.answer(
@@ -44,10 +47,11 @@ async def cmd_events(message: types.Message, state: FSMContext):
     profile = await get_user_profile(message.from_user.id)
     if profile and profile[0]:
         registrations = await check_user_registration(message.from_user.id)
+        event_counts = await get_all_event_counts()
         await message.answer(
             "📋 **Мероприятия**\n\nВыберите мероприятие:",
             parse_mode="Markdown",
-            reply_markup=get_events_keyboard(registrations)
+            reply_markup=get_events_keyboard(registrations, event_counts)
         )
     else:
         await message.answer(
@@ -89,29 +93,21 @@ async def select_event(callback: types.CallbackQuery):
         reply_markup=keyboard
     )
     
-    # Отправляем фото альбомом (до 10 фото вместе)
-    if participants:
-        photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
-        
-        if photos_with_ids:
-            # Разбиваем на группы по 10 фото (лимит Telegram)
-            for i in range(0, len(photos_with_ids), 10):
-                batch = photos_with_ids[i:i+10]
-                media_group = [
-                    InputMediaPhoto(media=photo_id)
-                    for _, photo_id in batch
-                ]
-                
-                try:
-                    await callback.message.answer_media_group(media=media_group)
-                except Exception as e:
-                    logging.error(f"Failed to send media group: {e}")
-                    # Если не получилось альбомом, отправляем по одному
-                    for nickname, photo_id in batch:
-                        try:
-                            await callback.message.answer_photo(photo=photo_id)
-                        except:
-                            pass
+    # Отправляем фото альбомом
+    photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
+    
+    if photos_with_ids:
+        for i in range(0, len(photos_with_ids), 10):
+            batch = photos_with_ids[i:i+10]
+            media_group = [
+                InputMediaPhoto(media=photo_id)
+                for _, photo_id in batch
+            ]
+            
+            try:
+                await callback.message.answer_media_group(media=media_group)
+            except Exception as e:
+                logging.error(f"Failed to send media group: {e}")
 
 @dp.callback_query(F.data.startswith("register_"))
 async def register_event(callback: types.CallbackQuery):
@@ -175,28 +171,27 @@ async def unregister_event(callback: types.CallbackQuery):
         parse_mode="Markdown",
         reply_markup=get_register_keyboard(event_id)
     )
-    
-    # Отправляем фото альбомом
-    photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
-    
-    if photos_with_ids:
-        for i in range(0, len(photos_with_ids), 10):
-            batch = photos_with_ids[i:i+10]
-            media_group = [
-                InputMediaPhoto(media=photo_id)
-                for _, photo_id in batch
-            ]
-            
-            try:
-                await callback.message.answer_media_group(media=media_group)
-            except Exception as e:
-                logging.error(f"Failed to send media group: {e}")
 
 @dp.callback_query(F.data == "back")
 async def go_back(callback: types.CallbackQuery):
     registrations = await check_user_registration(callback.from_user.id)
+    event_counts = await get_all_event_counts()
     await callback.message.edit_text(
         "📋 Афиша\n\nВыберите мероприятие:",
         parse_mode="Markdown",
-        reply_markup=get_events_keyboard(registrations)
+        reply_markup=get_events_keyboard(registrations, event_counts)
     )
+
+@dp.callback_query(F.data == "show_events")
+async def show_events_from_profile(callback: types.CallbackQuery):
+    """Кнопка Мероприятия из профиля"""
+    registrations = await check_user_registration(callback.from_user.id)
+    event_counts = await get_all_event_counts()
+    
+    await callback.message.answer(
+        "📋 **Мероприятия**\n\nВыберите мероприятие:",
+        parse_mode="Markdown",
+        reply_markup=get_events_keyboard(registrations, event_counts)
+    )
+    
+    await callback.answer()

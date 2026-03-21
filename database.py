@@ -1,6 +1,7 @@
 import aiosqlite
 
 async def init_db():
+    """Создаёт таблицы при первом запуске"""
     async with aiosqlite.connect("events.db") as db:
         await db.execute('''
             CREATE TABLE IF NOT EXISTS profiles (
@@ -21,6 +22,7 @@ async def init_db():
         await db.commit()
 
 async def save_profile(user_id: int, username: str, nickname: str, photo_id: str):
+    """Сохраняет или обновляет профиль"""
     async with aiosqlite.connect("events.db") as db:
         await db.execute(
             'INSERT OR REPLACE INTO profiles (user_id, username, nickname, photo_id) VALUES (?, ?, ?, ?)',
@@ -29,6 +31,7 @@ async def save_profile(user_id: int, username: str, nickname: str, photo_id: str
         await db.commit()
 
 async def get_user_profile(user_id: int):
+    """Получает профиль пользователя"""
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute(
             'SELECT nickname, photo_id FROM profiles WHERE user_id = ?',
@@ -37,6 +40,7 @@ async def get_user_profile(user_id: int):
         return await cursor.fetchone()
 
 async def register_for_event(user_id: int, event_id: int):
+    """Записывает пользователя на событие"""
     async with aiosqlite.connect("events.db") as db:
         try:
             await db.execute(
@@ -49,6 +53,7 @@ async def register_for_event(user_id: int, event_id: int):
             return False
 
 async def check_user_registration(user_id: int, event_id: int = None):
+    """Проверяет регистрацию на конкретное событие или все"""
     async with aiosqlite.connect("events.db") as db:
         if event_id:
             cursor = await db.execute(
@@ -64,6 +69,7 @@ async def check_user_registration(user_id: int, event_id: int = None):
         return [r[0] for r in result] if result else []
 
 async def unregister_from_event(user_id: int, event_id: int):
+    """Отменяет запись на конкретное событие"""
     async with aiosqlite.connect("events.db") as db:
         await db.execute(
             'DELETE FROM registrations WHERE user_id = ? AND event_id = ?',
@@ -72,6 +78,7 @@ async def unregister_from_event(user_id: int, event_id: int):
         await db.commit()
 
 async def get_event_participants(event_id: int):
+    """Получает участников события с данными профиля"""
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute('''
             SELECT p.nickname, p.photo_id
@@ -80,3 +87,14 @@ async def get_event_participants(event_id: int):
             WHERE r.event_id = ?
         ''', (event_id,))
         return await cursor.fetchall()
+
+async def get_all_event_counts():
+    """Получает количество участников для всех мероприятий"""
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute('''
+            SELECT event_id, COUNT(*) as count
+            FROM registrations
+            GROUP BY event_id
+        ''')
+        result = await cursor.fetchall()
+        return {row[0]: row[1] for row in result}

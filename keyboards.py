@@ -7,16 +7,21 @@ EVENTS = {
     4: "🎮 Игры"
 }
 
-def get_events_keyboard(user_registrations: list = None):
-    """Клавиатура со списком мероприятий"""
+def get_events_keyboard(user_registrations: list = None, event_counts: dict = None):
+    """Клавиатура со списком мероприятий и количеством участников"""
     if user_registrations is None:
         user_registrations = []
+    if event_counts is None:
+        event_counts = {}
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     for event_id, event_name in EVENTS.items():
         status = " ✅" if event_id in user_registrations else ""
+        count = event_counts.get(event_id, 0)
+        # Добавляем иконку и количество участников
+        event_text = f"{event_name}{status} 👥 {count}"
         keyboard.inline_keyboard.append([
-            InlineKeyboardButton(text=f"{event_name}{status}", callback_data=f"event_{event_id}")
+            InlineKeyboardButton(text=event_text, callback_data=f"event_{event_id}")
         ])
     keyboard.inline_keyboard.append([InlineKeyboardButton(text="👤 Профиль", callback_data="profile")])
     return keyboard
