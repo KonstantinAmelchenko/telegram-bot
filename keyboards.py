@@ -1,7 +1,6 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 
 def get_events_keyboard(user_registrations: list = None, event_counts: dict = None, events: list = None):
-    """Клавиатура со списком мероприятий из БД"""
     if user_registrations is None:
         user_registrations = []
     if event_counts is None:
@@ -11,11 +10,9 @@ def get_events_keyboard(user_registrations: list = None, event_counts: dict = No
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     
-    # events приходит как список кортежей: (id, name, date, time)
     for event_id, event_name, event_date, event_time in events:
         status = " ✅" if event_id in user_registrations else ""
         count = event_counts.get(event_id, 0)
-        # Формируем текст кнопки: Название | Дата Время ✅ 👥 N
         event_text = f"{event_name} | {event_date} {event_time}{status} 👥 {count}"
         
         keyboard.inline_keyboard.append([
@@ -38,7 +35,6 @@ def get_registered_keyboard(event_id: int):
     ])
 
 def get_profile_keyboard():
-    """Клавиатура профиля (исправлены пробелы)"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✏️ Изменить ник", callback_data="edit_nickname")],
         [InlineKeyboardButton(text="📷 Изменить фото", callback_data="edit_photo")],

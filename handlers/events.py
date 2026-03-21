@@ -11,8 +11,8 @@ from database import (
     unregister_from_event,
     get_event_participants,
     get_all_event_counts,
-    get_all_events,       # <-- Добавлено
-    get_event_by_id       # <-- Добавлено
+    get_all_events,
+    get_event_by_id
 )
 from keyboards import (
     get_events_keyboard,
@@ -30,7 +30,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     if profile and profile[0]:
         registrations = await check_user_registration(message.from_user.id)
         event_counts = await get_all_event_counts()
-        events = await get_all_events()  # <-- Берём из БД
+        events = await get_all_events()
         await message.answer(
             f"👋 Привет, {profile[0]}!",
             reply_markup=get_events_keyboard(registrations, event_counts, events)
@@ -49,7 +49,7 @@ async def cmd_events(message: types.Message, state: FSMContext):
     if profile and profile[0]:
         registrations = await check_user_registration(message.from_user.id)
         event_counts = await get_all_event_counts()
-        events = await get_all_events()  # <-- Берём из БД
+        events = await get_all_events()
         await message.answer(
             "📋 Мероприятия\n\nВыберите мероприятие:",
             parse_mode="Markdown",
@@ -68,9 +68,8 @@ async def btn_menu(message: types.Message, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("event_"))
 async def select_event(callback: types.CallbackQuery):
-    """Показывает мероприятие со списком участников"""
     event_id = int(callback.data.split("_")[1])
-    event = await get_event_by_id(event_id)  # <-- Берём из БД
+    event = await get_event_by_id(event_id)
     
     if not event:
         await callback.answer("Мероприятие не найдено или удалено", show_alert=True)
@@ -81,7 +80,6 @@ async def select_event(callback: types.CallbackQuery):
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
     
-    # Формируем текст с датой и временем
     text = f"📅 **{event_name}**\n"
     text += f"🗓 **Дата:** {event_date}\n"
     text += f"⏰ **Время:** {event_time}\n\n"
@@ -105,7 +103,6 @@ async def select_event(callback: types.CallbackQuery):
         reply_markup=keyboard
     )
 
-    # Отправка фото (если есть)
     photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
     if photos_with_ids:
         for i in range(0, len(photos_with_ids), 10):
@@ -183,7 +180,7 @@ async def unregister_event(callback: types.CallbackQuery):
 async def go_back(callback: types.CallbackQuery):
     registrations = await check_user_registration(callback.from_user.id)
     event_counts = await get_all_event_counts()
-    events = await get_all_events()  # <-- Берём из БД
+    events = await get_all_events()
     await callback.message.edit_text(
         "📋 Афиша\n\nВыберите мероприятие:",
         parse_mode="Markdown",
@@ -194,7 +191,7 @@ async def go_back(callback: types.CallbackQuery):
 async def show_events_from_profile(callback: types.CallbackQuery):
     registrations = await check_user_registration(callback.from_user.id)
     event_counts = await get_all_event_counts()
-    events = await get_all_events()  # <-- Берём из БД
+    events = await get_all_events()
     await callback.message.answer(
         "📋 **Мероприятия**\n\nВыберите мероприятие:",
         parse_mode="Markdown",
