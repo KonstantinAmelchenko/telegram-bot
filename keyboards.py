@@ -21,21 +21,18 @@ def get_events_keyboard(user_registrations: list = None):
     return keyboard
 
 def get_register_keyboard(event_id: int):
-    """Клавиатура для записи (если не записан)"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Записаться", callback_data=f"register_{event_id}")],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="back")]
     ])
 
 def get_registered_keyboard(event_id: int):
-    """Клавиатура для уже записанных"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❌ Отменить запись", callback_data=f"unregister_{event_id}")],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="back")]
     ])
 
 def get_profile_keyboard():
-    """Без кнопки Назад"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✏️ Изменить ник", callback_data="edit_nickname")],
         [InlineKeyboardButton(text="📷 Изменить фото", callback_data="edit_photo")],
@@ -51,4 +48,9 @@ def get_main_menu_keyboard():
 def get_cancel_keyboard():
     return ReplyKeyboardMarkup(keyboard=[
         [KeyboardButton(text="❌ Отмена")]
+    ], resize_keyboard=True)
+
+def get_skip_keyboard():  # ← ДОБАВЛЕНО!
+    return ReplyKeyboardMarkup(keyboard=[
+        [KeyboardButton(text="⏭️ Пропустить")]
     ], resize_keyboard=True)
