@@ -8,12 +8,13 @@ from database import create_event, delete_event, get_all_events
 
 class EventCreation(StatesGroup):
     waiting_for_name = State()
-    waiting_for_address = State()
     waiting_for_date = State()
     waiting_for_time = State()
-    
+    waiting_for_address = State()  # <-- Добавлено состояние для адреса
+
 @dp.message(Command("create_event"))
 async def cmd_create_event(message: types.Message, state: FSMContext):
+    """Команда для создания мероприятия (только для админа)"""
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ У вас нет прав для этой команды.")
         return
@@ -58,15 +59,33 @@ async def process_event_time(message: types.Message, state: FSMContext):
         await message.answer("Отменено.", reply_markup=types.ReplyKeyboardRemove())
         return
     
+    await state.update_data(time=message.text)
+    await message.answer("📍 Введите адрес (или '⏭️ Пропустить'):")
+    await state.set_state(EventCreation.waiting_for_address)
+
+@dp.message(EventCreation.waiting_for_address)
+async def process_event_address(message: types.Message, state: FSMContext):
+    if message.text == "❌ Отмена":
+        await state.clear()
+        await message.answer("Отменено.", reply_markup=types.ReplyKeyboardRemove())
+        return
+    
+    address = ""
+    if message.text == "⏭️ Пропустить":
+        address = ""
+    else:
+        address = message.text
+    
     data = await state.get_data()
-    event_id = await create_event(data['name'], data['date'], message.text)
+    event_id = await create_event(data['name'], data['date'], data['time'], address)
     
     await state.clear()
     await message.answer(
         f"✅ **Мероприятие создано!**\n\n"
         f"📅 {data['name']}\n"
         f"🗓 {data['date']}\n"
-        f"⏰ {message.text}\n\n"
+        f"⏰ {data['time']}\n"
+        f"📍 {address if address else 'Адрес не указан'}\n\n"
         f"ID: {event_id}",
         parse_mode="Markdown",
         reply_markup=types.ReplyKeyboardRemove()
@@ -74,6 +93,7 @@ async def process_event_time(message: types.Message, state: FSMContext):
 
 @dp.message(Command("delete_event"))
 async def cmd_delete_event(message: types.Message):
+    """Команда для удаления мероприятия (только для админа)"""
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ У вас нет прав для этой команды.")
         return
@@ -89,6 +109,7 @@ async def cmd_delete_event(message: types.Message):
 
 @dp.message(Command("list_events"))
 async def cmd_list_events(message: types.Message):
+    """Показать все мероприятия (только для админа)"""
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ У вас нет прав для этой команды.")
         return
@@ -100,7 +121,9 @@ async def cmd_list_events(message: types.Message):
         return
     
     text = "📋 **Список мероприятий:**\n\n"
-    for event_id, name, date, time in events:
+    for event_id, name, date, time, address in events:
         text += f"{event_id}. {name} | {date} {time}\n"
+        if address:
+            text += f"   📍 {address}\n"
     
     await message.answer(text, parse_mode="Markdown")

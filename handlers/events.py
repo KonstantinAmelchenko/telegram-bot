@@ -75,17 +75,17 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer("Мероприятие не найдено или удалено", show_alert=True)
         return
 
-    _, event_name, event_date, event_time = event
+    _, event_name, event_date, event_time, event_address = event  # <-- Добавлен адрес
     
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
     
     text = f"📅 **{event_name}**\n"
+    text += f"🗓 **Дата:** {event_date}\n"
+    text += f"⏰ **Время:** {event_time}\n"
     if event_address:  # <-- Показываем адрес, если он есть
         text += f"📍 **Адрес:** {event_address}\n"
     text += "\n"
-    text += f"🗓 **Дата:** {event_date}\n"
-    text += f"⏰ **Время:** {event_time}\n\n"
     
     if participants:
         text += "**Список участников:**\n"
