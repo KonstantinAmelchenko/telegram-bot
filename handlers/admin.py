@@ -8,9 +8,10 @@ from database import create_event, delete_event, get_all_events
 
 class EventCreation(StatesGroup):
     waiting_for_name = State()
+    waiting_for_address = State()
     waiting_for_date = State()
     waiting_for_time = State()
-
+    
 @dp.message(Command("create_event"))
 async def cmd_create_event(message: types.Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:

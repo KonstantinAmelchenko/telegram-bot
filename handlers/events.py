@@ -81,6 +81,9 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
     participants = await get_event_participants(event_id)
     
     text = f"📅 **{event_name}**\n"
+    if event_address:  # <-- Показываем адрес, если он есть
+        text += f"📍 **Адрес:** {event_address}\n"
+    text += "\n"
     text += f"🗓 **Дата:** {event_date}\n"
     text += f"⏰ **Время:** {event_time}\n\n"
     
