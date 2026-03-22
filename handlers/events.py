@@ -80,12 +80,14 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
     
-    text = f"📅 **{event_name}**\n"
-    text += f"🗓 **Дата:** {event_date}\n"
-    text += f"⏰ **Время:** {event_time}\n"
+    # ✅ Адрес на той же строке с названием, через точку
+    text = f"**{event_name}**"
     if event_address:
-        text += f"📍 **Адрес:** {event_address}\n"
-    text += "\n"
+        text += f". {event_address}\n"
+    else:
+        text += "\n"
+    text += f"Дата: {event_date}\n"
+    text += f"Время: {event_time}\n\n"
     
     if participants:
         text += "**Список участников:**\n"
@@ -106,6 +108,7 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=keyboard
     )
 
+    # Отправка фото и сохранение ID сообщений
     photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
     photo_message_ids = []
     
@@ -131,119 +134,19 @@ async def register_event(callback: types.CallbackQuery, state: FSMContext):
         return
     
     event_name = event[1]
+    event_address = event[4]
     success = await register_for_event(callback.from_user.id, event_id)
     
     if success:
         participants = await get_event_participants(event_id)
-        text = f"📅 **{event_name}**\n"
-        text += f"🗓 **Дата:** {event[2]}\n"
-        text += f"⏰ **Время:** {event[3]}\n"
-        if event[4]:
-            text += f"📍 **Адрес:** {event[4]}\n"
-        text += "\n"
+        # ✅ Адрес на той же строке с названием, через точку
+        text = f"**{event_name}**"
+        if event_address:
+            text += f". {event_address}\n"
+        else:
+            text += "\n"
+        text += f"Дата: {event[2]}\n"
+        text += f"Время: {event[3]}\n\n"
         text += "**Список участников:**\n"
         for i, (nickname, photo_id) in enumerate(participants, 1):
-            is_me = " (вы)" if nickname == callback.from_user.username else ""
-            text += f"{i}. {nickname}{is_me}\n"
-        
-        await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_registered_keyboard(event_id))
-        
-        photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
-        photo_message_ids = []
-        
-        if photos_with_ids:
-            for i in range(0, len(photos_with_ids), 10):
-                batch = photos_with_ids[i:i+10]
-                media_group = [InputMediaPhoto(media=photo_id) for _, photo_id in batch]
-                try:
-                    result = await callback.message.answer_media_group(media=media_group)
-                    photo_message_ids.extend([msg.message_id for msg in result])
-                except Exception as e:
-                    logging.error(f"Failed to send media group: {e}")
-        
-        await state.update_data(photo_message_ids=photo_message_ids)
-    else:
-        await callback.answer("Вы уже записаны.", show_alert=True)
-
-@dp.callback_query(F.data.startswith("unregister_"))
-async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
-    event_id = int(callback.data.split("_")[1])
-    event = await get_event_by_id(event_id)
-    
-    if not event:
-        await callback.answer("Мероприятие не найдено", show_alert=True)
-        return
-    
-    event_name = event[1]
-    await unregister_from_event(callback.from_user.id, event_id)
-    participants = await get_event_participants(event_id)
-    
-    text = f"📅 **{event_name}**\n"
-    text += f"🗓 **Дата:** {event[2]}\n"
-    text += f"⏰ **Время:** {event[3]}\n"
-    if event[4]:
-        text += f"📍 **Адрес:** {event[4]}\n"
-    text += "\n"
-    
-    if participants:
-        text += "**Список участников:**\n"
-        for i, (nickname, photo_id) in enumerate(participants, 1):
-            is_me = " (вы)" if nickname == callback.from_user.username else ""
-            text += f"{i}. {nickname}{is_me}\n"
-    else:
-        text += "Пока никого нет. Будьте первым!"
-
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_register_keyboard(event_id))
-    await state.update_data(photo_message_ids=[])
-
-@dp.callback_query(F.data == "back")
-async def go_back(callback: types.CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    photo_message_ids = data.get("photo_message_ids", [])
-    
-    for msg_id in photo_message_ids:
-        try:
-            await callback.message.bot.delete_message(
-                chat_id=callback.from_user.id,
-                message_id=msg_id
-            )
-        except Exception:
-            pass
-    
-    await state.update_data(photo_message_ids=[])
-    
-    registrations = await check_user_registration(callback.from_user.id)
-    event_counts = await get_all_event_counts()
-    events = await get_all_events()
-    await callback.message.edit_text(
-        "📋 Афиша\n\nВыберите мероприятие:",
-        parse_mode="Markdown",
-        reply_markup=get_events_keyboard(registrations, event_counts, events)
-    )
-
-@dp.callback_query(F.data == "show_events")
-async def show_events_from_profile(callback: types.CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    photo_message_ids = data.get("photo_message_ids", [])
-    
-    for msg_id in photo_message_ids:
-        try:
-            await callback.message.bot.delete_message(
-                chat_id=callback.from_user.id,
-                message_id=msg_id
-            )
-        except Exception:
-            pass
-    
-    await state.update_data(photo_message_ids=[])
-    await callback.message.delete()
-    
-    registrations = await check_user_registration(callback.from_user.id)
-    event_counts = await get_all_event_counts()
-    events = await get_all_events()
-    await callback.message.answer(
-        "📋 **Мероприятия**\n\nВыберите мероприятие:",
-        parse_mode="Markdown",
-        reply_markup=get_events_keyboard(registrations, event_counts, events)
-    )
-    await callback.answer()
+            is_me = " (вы)"

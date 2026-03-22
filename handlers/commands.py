@@ -7,9 +7,9 @@ async def set_commands(bot: Bot):
         BotCommand(command="start", description="👋 Запустить бота"),
         BotCommand(command="events", description="📋 Показать мероприятия"),
         BotCommand(command="profile", description="👤 Мой профиль"),
-        BotCommand(command="create_event", description="➕ Создать мероприятие (админ)"),
-        BotCommand(command="list_events", description="📝 Список мероприятий (админ)"),
-        BotCommand(command="delete_event", description="❌ Удалить мероприятие (админ)")
+        BotCommand(command="create_event", description="(admin)"),
+        BotCommand(command="list_events", description="(admin)"),
+        BotCommand(command="delete_event", description="(admin)")
     ]
     
     await bot.set_my_commands(commands)
