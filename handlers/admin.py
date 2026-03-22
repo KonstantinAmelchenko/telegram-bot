@@ -10,11 +10,10 @@ class EventCreation(StatesGroup):
     waiting_for_name = State()
     waiting_for_date = State()
     waiting_for_time = State()
-    waiting_for_address = State()  # <-- Добавлено состояние для адреса
+    waiting_for_address = State()
 
 @dp.message(Command("create_event"))
 async def cmd_create_event(message: types.Message, state: FSMContext):
-    """Команда для создания мероприятия (только для админа)"""
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ У вас нет прав для этой команды.")
         return
@@ -93,7 +92,6 @@ async def process_event_address(message: types.Message, state: FSMContext):
 
 @dp.message(Command("delete_event"))
 async def cmd_delete_event(message: types.Message):
-    """Команда для удаления мероприятия (только для админа)"""
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ У вас нет прав для этой команды.")
         return
@@ -109,7 +107,6 @@ async def cmd_delete_event(message: types.Message):
 
 @dp.message(Command("list_events"))
 async def cmd_list_events(message: types.Message):
-    """Показать все мероприятия (только для админа)"""
     if message.from_user.id != ADMIN_ID:
         await message.answer("❌ У вас нет прав для этой команды.")
         return

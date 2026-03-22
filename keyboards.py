@@ -11,12 +11,11 @@ def get_events_keyboard(user_registrations: list = None, event_counts: dict = No
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[])
     
-    for event_id, event_name, event_date, event_time in events:
+    for event_id, event_name, event_date, event_time, event_address in events:
         status = " ✅" if event_id in user_registrations else ""
         count = event_counts.get(event_id, 0)
         day_of_week = get_day_of_week(event_date)
         formatted_date = format_event_date(event_date)
-        # Формируем текст: День недели, Число месяц Время ✅ 👥 N (без названия)
         event_text = f"{day_of_week}, {formatted_date} {event_time}{status} 👥 {count}"
         
         keyboard.inline_keyboard.append([

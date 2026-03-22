@@ -26,7 +26,6 @@ def get_day_of_week(date_str: str) -> str:
 async def init_db():
     """Создаёт таблицы при первом запуске"""
     async with aiosqlite.connect("events.db") as db:
-        # Таблица профилей
         await db.execute('''
         CREATE TABLE IF NOT EXISTS profiles (
             user_id INTEGER PRIMARY KEY,
@@ -36,7 +35,6 @@ async def init_db():
         )
         ''')
         
-        # Таблица регистраций
         await db.execute('''
         CREATE TABLE IF NOT EXISTS registrations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,7 +44,7 @@ async def init_db():
         )
         ''')
         
-        # Таблица мероприятий (ДОБАВЛЕНО поле address)
+        # Таблица мероприятий с полем address
         await db.execute('''
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,7 +133,6 @@ async def get_all_event_counts():
 # === ФУНКЦИИ ДЛЯ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ ===
 
 async def create_event(name: str, date: str, time: str, address: str = ""):
-    """Создаёт новое мероприятие"""
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute(
             'INSERT INTO events (name, date, time, address) VALUES (?, ?, ?, ?)',
@@ -145,7 +142,6 @@ async def create_event(name: str, date: str, time: str, address: str = ""):
         return cursor.lastrowid
 
 async def get_all_events():
-    """Получает все активные мероприятия"""
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute(
             'SELECT id, name, date, time, address FROM events WHERE is_active = 1 ORDER BY date, time'
@@ -153,7 +149,6 @@ async def get_all_events():
         return await cursor.fetchall()
 
 async def get_event_by_id(event_id: int):
-    """Получает мероприятие по ID"""
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute(
             'SELECT id, name, date, time, address FROM events WHERE id = ? AND is_active = 1',
@@ -162,7 +157,6 @@ async def get_event_by_id(event_id: int):
         return await cursor.fetchone()
 
 async def delete_event(event_id: int):
-    """Удаляет (деактивирует) мероприятие"""
     async with aiosqlite.connect("events.db") as db:
         await db.execute(
             'UPDATE events SET is_active = 0 WHERE id = ?',
@@ -171,7 +165,6 @@ async def delete_event(event_id: int):
         await db.commit()
 
 async def get_event_count(event_id: int):
-    """Получает количество участников конкретного мероприятия"""
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute(
             'SELECT COUNT(*) FROM registrations WHERE event_id = ?',

@@ -75,7 +75,7 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer("Мероприятие не найдено или удалено", show_alert=True)
         return
 
-    _, event_name, event_date, event_time, event_address = event  # <-- Добавлен адрес
+    _, event_name, event_date, event_time, event_address = event
     
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
@@ -83,7 +83,7 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
     text = f"📅 **{event_name}**\n"
     text += f"🗓 **Дата:** {event_date}\n"
     text += f"⏰ **Время:** {event_time}\n"
-    if event_address:  # <-- Показываем адрес, если он есть
+    if event_address:
         text += f"📍 **Адрес:** {event_address}\n"
     text += "\n"
     
@@ -106,7 +106,6 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=keyboard
     )
 
-    # Отправка фото и сохранение ID сообщений
     photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
     photo_message_ids = []
     
@@ -138,7 +137,10 @@ async def register_event(callback: types.CallbackQuery, state: FSMContext):
         participants = await get_event_participants(event_id)
         text = f"📅 **{event_name}**\n"
         text += f"🗓 **Дата:** {event[2]}\n"
-        text += f"⏰ **Время:** {event[3]}\n\n"
+        text += f"⏰ **Время:** {event[3]}\n"
+        if event[4]:
+            text += f"📍 **Адрес:** {event[4]}\n"
+        text += "\n"
         text += "**Список участников:**\n"
         for i, (nickname, photo_id) in enumerate(participants, 1):
             is_me = " (вы)" if nickname == callback.from_user.username else ""
@@ -146,7 +148,6 @@ async def register_event(callback: types.CallbackQuery, state: FSMContext):
         
         await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_registered_keyboard(event_id))
         
-        # Отправка фото и сохранение ID сообщений
         photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
         photo_message_ids = []
         
@@ -179,7 +180,10 @@ async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
     
     text = f"📅 **{event_name}**\n"
     text += f"🗓 **Дата:** {event[2]}\n"
-    text += f"⏰ **Время:** {event[3]}\n\n"
+    text += f"⏰ **Время:** {event[3]}\n"
+    if event[4]:
+        text += f"📍 **Адрес:** {event[4]}\n"
+    text += "\n"
     
     if participants:
         text += "**Список участников:**\n"
@@ -190,13 +194,10 @@ async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
         text += "Пока никого нет. Будьте первым!"
 
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_register_keyboard(event_id))
-    
-    # Очищаем ID фото при обновлении списка
     await state.update_data(photo_message_ids=[])
 
 @dp.callback_query(F.data == "back")
 async def go_back(callback: types.CallbackQuery, state: FSMContext):
-    # Удаляем сообщения с фотографиями
     data = await state.get_data()
     photo_message_ids = data.get("photo_message_ids", [])
     
@@ -209,10 +210,8 @@ async def go_back(callback: types.CallbackQuery, state: FSMContext):
         except Exception:
             pass
     
-    # Очищаем состояние
     await state.update_data(photo_message_ids=[])
     
-    # Показываем список мероприятий
     registrations = await check_user_registration(callback.from_user.id)
     event_counts = await get_all_event_counts()
     events = await get_all_events()
@@ -224,7 +223,6 @@ async def go_back(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data == "show_events")
 async def show_events_from_profile(callback: types.CallbackQuery, state: FSMContext):
-    # Удаляем старые фото при открытии мероприятий из профиля
     data = await state.get_data()
     photo_message_ids = data.get("photo_message_ids", [])
     
@@ -238,8 +236,6 @@ async def show_events_from_profile(callback: types.CallbackQuery, state: FSMCont
             pass
     
     await state.update_data(photo_message_ids=[])
-    
-    # Удаляем сообщение с профилем
     await callback.message.delete()
     
     registrations = await check_user_registration(callback.from_user.id)
