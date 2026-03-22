@@ -1,6 +1,18 @@
 import aiosqlite
 from datetime import datetime
 
+def format_event_date(date_str: str) -> str:
+    """Преобразует дату из DD.MM.YYYY в формат 'D месяц' (без года)"""
+    try:
+        day, month, year = map(int, date_str.split('.'))
+        months = [
+            'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+            'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+        ]
+        return f"{day} {months[month - 1]}"
+    except:
+        return date_str
+    
 def get_day_of_week(date_str: str) -> str:
     """Возвращает день недели для даты в формате DD.MM.YYYY"""
     try:
