@@ -177,6 +177,7 @@ async def show_events_from_profile(callback: types.CallbackQuery):
     registrations = await check_user_registration(callback.from_user.id)
     event_counts = await get_all_event_counts()
     events = await get_all_events()  # ✅ ДОБАВЛЕНО!
+    await callback.message.delete() 
     await callback.message.answer(
         "📋 **Мероприятия**\n\nВыберите мероприятие:",
         parse_mode="Markdown",

@@ -84,8 +84,8 @@ async def select_event(callback: types.CallbackQuery):
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
     
-    text = f"📅 **{event_name}**\n"
-    text += f"🗓 **Дата:** {day_of_week}, {formatted_date}\n"  # <-- Используем форматированную дату
+    text = f"Играем в **{event_name}**\n"
+    text += f"📅 **Дата:** {day_of_week}, {formatted_date}\n"  # <-- Используем форматированную дату
     text += f"⏰ **Время:** {event_time}\n\n"
     
     if participants:
