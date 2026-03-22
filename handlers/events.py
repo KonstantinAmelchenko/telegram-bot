@@ -12,9 +12,7 @@ from database import (
     get_event_participants,
     get_all_event_counts,
     get_all_events,
-    get_event_by_id,
-    get_day_of_week,
-    format_event_date  # <-- Импортируем функцию
+    get_event_by_id
 )
 from keyboards import (
     get_events_keyboard,
@@ -69,7 +67,7 @@ async def btn_menu(message: types.Message, state: FSMContext):
     await cmd_events(message, state)
 
 @dp.callback_query(F.data.startswith("event_"))
-async def select_event(callback: types.CallbackQuery):
+async def select_event(callback: types.CallbackQuery, state: FSMContext):
     event_id = int(callback.data.split("_")[1])
     event = await get_event_by_id(event_id)
     
@@ -78,14 +76,12 @@ async def select_event(callback: types.CallbackQuery):
         return
 
     _, event_name, event_date, event_time = event
-    day_of_week = get_day_of_week(event_date)
-    formatted_date = format_event_date(event_date)  # <-- Форматируем дату
     
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
     
-    text = f"Играем в **{event_name}**\n"
-    text += f"📅 **Дата:** {day_of_week}, {formatted_date}\n"  # <-- Используем форматированную дату
+    text = f"📅 **{event_name}**\n"
+    text += f"🗓 **Дата:** {event_date}\n"
     text += f"⏰ **Время:** {event_time}\n\n"
     
     if participants:
@@ -107,18 +103,24 @@ async def select_event(callback: types.CallbackQuery):
         reply_markup=keyboard
     )
 
+    # Отправка фото и сохранение ID сообщений
     photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
+    photo_message_ids = []
+    
     if photos_with_ids:
         for i in range(0, len(photos_with_ids), 10):
             batch = photos_with_ids[i:i+10]
             media_group = [InputMediaPhoto(media=photo_id) for _, photo_id in batch]
             try:
-                await callback.message.answer_media_group(media=media_group)
+                result = await callback.message.answer_media_group(media=media_group)
+                photo_message_ids.extend([msg.message_id for msg in result])
             except Exception as e:
                 logging.error(f"Failed to send media group: {e}")
+    
+    await state.update_data(photo_message_ids=photo_message_ids)
 
 @dp.callback_query(F.data.startswith("register_"))
-async def register_event(callback: types.CallbackQuery):
+async def register_event(callback: types.CallbackQuery, state: FSMContext):
     event_id = int(callback.data.split("_")[1])
     event = await get_event_by_id(event_id)
     
@@ -141,20 +143,26 @@ async def register_event(callback: types.CallbackQuery):
         
         await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_registered_keyboard(event_id))
         
+        # Отправка фото и сохранение ID сообщений
         photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
+        photo_message_ids = []
+        
         if photos_with_ids:
             for i in range(0, len(photos_with_ids), 10):
                 batch = photos_with_ids[i:i+10]
                 media_group = [InputMediaPhoto(media=photo_id) for _, photo_id in batch]
                 try:
-                    await callback.message.answer_media_group(media=media_group)
+                    result = await callback.message.answer_media_group(media=media_group)
+                    photo_message_ids.extend([msg.message_id for msg in result])
                 except Exception as e:
                     logging.error(f"Failed to send media group: {e}")
+        
+        await state.update_data(photo_message_ids=photo_message_ids)
     else:
         await callback.answer("Вы уже записаны.", show_alert=True)
 
 @dp.callback_query(F.data.startswith("unregister_"))
-async def unregister_event(callback: types.CallbackQuery):
+async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
     event_id = int(callback.data.split("_")[1])
     event = await get_event_by_id(event_id)
     
@@ -179,9 +187,29 @@ async def unregister_event(callback: types.CallbackQuery):
         text += "Пока никого нет. Будьте первым!"
 
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_register_keyboard(event_id))
+    
+    # Очищаем ID фото при обновлении списка
+    await state.update_data(photo_message_ids=[])
 
 @dp.callback_query(F.data == "back")
-async def go_back(callback: types.CallbackQuery):
+async def go_back(callback: types.CallbackQuery, state: FSMContext):
+    # Удаляем сообщения с фотографиями
+    data = await state.get_data()
+    photo_message_ids = data.get("photo_message_ids", [])
+    
+    for msg_id in photo_message_ids:
+        try:
+            await callback.message.bot.delete_message(
+                chat_id=callback.from_user.id,
+                message_id=msg_id
+            )
+        except Exception:
+            pass
+    
+    # Очищаем состояние
+    await state.update_data(photo_message_ids=[])
+    
+    # Показываем список мероприятий
     registrations = await check_user_registration(callback.from_user.id)
     event_counts = await get_all_event_counts()
     events = await get_all_events()
@@ -192,7 +220,25 @@ async def go_back(callback: types.CallbackQuery):
     )
 
 @dp.callback_query(F.data == "show_events")
-async def show_events_from_profile(callback: types.CallbackQuery):
+async def show_events_from_profile(callback: types.CallbackQuery, state: FSMContext):
+    # Удаляем старые фото при открытии мероприятий из профиля
+    data = await state.get_data()
+    photo_message_ids = data.get("photo_message_ids", [])
+    
+    for msg_id in photo_message_ids:
+        try:
+            await callback.message.bot.delete_message(
+                chat_id=callback.from_user.id,
+                message_id=msg_id
+            )
+        except Exception:
+            pass
+    
+    await state.update_data(photo_message_ids=[])
+    
+    # Удаляем сообщение с профилем
+    await callback.message.delete()
+    
     registrations = await check_user_registration(callback.from_user.id)
     event_counts = await get_all_event_counts()
     events = await get_all_events()
