@@ -11,6 +11,38 @@ from keyboards import (
     get_events_keyboard
 )
 
+@dp.message(Command("profile"))
+async def cmd_profile(message: types.Message, state: FSMContext):
+    await state.clear()
+    profile = await get_user_profile(message.from_user.id)
+    if profile and profile[0]:
+        text = f"Никнейм: {profile[0]}"
+        if profile[1]:
+            try:
+                await message.answer_photo(
+                    photo=profile[1],
+                    caption=text,
+                    parse_mode="Markdown",
+                    reply_markup=get_profile_keyboard()
+                )
+            except Exception:
+                await message.answer(
+                    text + "\n⚠️ Фото устарело.",
+                    parse_mode="Markdown",
+                    reply_markup=get_profile_keyboard()
+                )
+        else:
+            await message.answer(
+                text,
+                parse_mode="Markdown",
+                reply_markup=get_profile_keyboard()
+            )
+    else:
+        await message.answer(
+            "Сначала настройте профиль! Нажмите /start",
+            reply_markup=get_main_menu_keyboard()
+        )
+
 class ProfileSetup(StatesGroup):
     waiting_for_nickname = State()
     waiting_for_photo = State()
