@@ -169,6 +169,7 @@ async def select_guests(callback: types.CallbackQuery, state: FSMContext):
 
     text += "**Подтвердить запись?**"
 
+    # ✅ ИСПРАВЛЕНО: callback_data=f"cancel_guests_{event_id}"
     await callback.message.edit_text(
         text,
         parse_mode="Markdown",
@@ -229,11 +230,10 @@ async def confirm_register(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
 
 
+# ✅ ДОБАВЛЕН ОБРАБОТЧИК cancel_guests_
 @dp.callback_query(F.data.startswith("cancel_guests_"))
 async def cancel_guests(callback: types.CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Отмена' при выборе гостей"""
     await state.clear()
-
     event_id = int(callback.data.split("_")[2])
     event = await get_event_by_id(event_id)
 

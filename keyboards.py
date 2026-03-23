@@ -26,7 +26,6 @@ def get_events_keyboard(user_registrations: list = None, event_counts: dict = No
     return keyboard
 
 def get_guests_keyboard(event_id: int):
-    """Клавиатура для выбора количества дополнительных гостей"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="👤 Только я", callback_data=f"guests_{event_id}_0")],
         [InlineKeyboardButton(text="👥 +1 человек", callback_data=f"guests_{event_id}_1")],
