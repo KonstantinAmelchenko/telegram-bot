@@ -109,6 +109,7 @@ async def unregister_from_event(user_id: int, event_id: int):
             (user_id, event_id)
         )
         await db.commit()
+        return True
 
 async def get_event_participants(event_id: int):
     async with aiosqlite.connect("events.db") as db:
