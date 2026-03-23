@@ -149,4 +149,68 @@ async def register_event(callback: types.CallbackQuery, state: FSMContext):
         text += f"Время: {event[3]}\n\n"
         text += "**Список участников:**\n"
         for i, (nickname, photo_id) in enumerate(participants, 1):
-            is_me = " (вы)"
+            is_me = " (вы)" if nickname == callback.from_user.username else ""
+            text += f"{i}. {nickname}{is_me}\n"
+
+        await callback.message.edit_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_registered_keyboard(event_id)
+        )
+        await callback.answer("✅ Вы записаны!")
+    else:
+        await callback.answer("❌ Ошибка при записи", show_alert=True)
+        @dp.callback_query(F.data.startswith("unregister_"))
+async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
+    event_id = int(callback.data.split("_")[1])
+    event = await get_event_by_id(event_id)
+    if not event:
+        await callback.answer("Мероприятие не найдено", show_alert=True)
+        return
+
+    event_name = event[1]
+    event_address = event[4]
+    success = await unregister_from_event(callback.from_user.id, event_id)
+
+    if success:
+        participants = await get_event_participants(event_id)
+        text = f"**{event_name}** "
+        if event_address:
+            text += f". {event_address}\n"
+        else:
+            text += "\n"
+        text += f"Дата: {event[2]}\n"
+        text += f"Время: {event[3]}\n\n"
+        text += "**Список участников:**\n"
+        for i, (nickname, photo_id) in enumerate(participants, 1):
+            is_me = " (вы)" if nickname == callback.from_user.username else ""
+            text += f"{i}. {nickname}{is_me}\n"
+
+        await callback.message.edit_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_register_keyboard(event_id)
+        )
+        await callback.answer("✅ Вы отменили запись")
+    else:
+        await callback.answer("❌ Ошибка при отмене записи", show_alert=True)
+
+@dp.callback_query(F.data == "back")
+async def go_back(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()
+    profile = await get_user_profile(callback.from_user.id)
+    if profile and profile[0]:
+        registrations = await check_user_registration(callback.from_user.id)
+        event_counts = await get_all_event_counts()
+        events = await get_all_events()
+        await callback.message.edit_text(
+            "📋 Мероприятия\n\nВыберите мероприятие:",
+            parse_mode="Markdown",
+            reply_markup=get_events_keyboard(registrations, event_counts, events)
+        )
+    else:
+        await callback.message.edit_text(
+            "Сначала настройте профиль! /start",
+            reply_markup=get_cancel_keyboard()
+        )
+    await callback.answer()
