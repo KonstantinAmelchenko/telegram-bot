@@ -78,7 +78,7 @@ async def btn_menu(message: types.Message, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("event_"))
 async def select_event(callback: types.CallbackQuery, state: FSMContext):
-    await state.clear()  # ✅ Очищаем состояние при входе в мероприятие
+    await state.clear()
     event_id = int(callback.data.split("_")[1])
     event = await get_event_by_id(event_id)
     if not event:
@@ -144,17 +144,16 @@ async def select_guests(callback: types.CallbackQuery, state: FSMContext):
     data = callback.data.split("_")
     event_id = int(data[1])
     guests_count = int(data[2])
-    
     await state.update_data(event_id=event_id, guests_count=guests_count)
-    
+
     event = await get_event_by_id(event_id)
     if not event:
         await callback.answer("Мероприятие не найдено", show_alert=True)
         return
-    
+
     event_name = event[1]
     event_address = event[4]
-    
+
     text = f"**{event_name}**"
     if event_address:
         text += f". {event_address}\n"
@@ -162,14 +161,14 @@ async def select_guests(callback: types.CallbackQuery, state: FSMContext):
         text += "\n"
     text += f"Дата: {event[2]}\n"
     text += f"Время: {event[3]}\n\n"
-    
+
     if guests_count > 0:
         text += f"👥 Вы записываетесь +{guests_count} гост(ей)\n\n"
     else:
         text += "👤 Вы записываетесь один\n\n"
-    
+
     text += "**Подтвердить запись?**"
-    
+
     await callback.message.edit_text(
         text,
         parse_mode="Markdown",
@@ -186,16 +185,15 @@ async def confirm_register(callback: types.CallbackQuery, state: FSMContext):
     event_id = int(callback.data.split("_")[2])
     data = await state.get_data()
     guests_count = data.get("guests_count", 0)
-    
     event = await get_event_by_id(event_id)
     if not event:
         await callback.answer("Мероприятие не найдено", show_alert=True)
         return
-    
+
     event_name = event[1]
     event_address = event[4]
     success = await register_for_event(callback.from_user.id, event_id, guests_count)
-    
+
     if success:
         participants = await get_event_participants(event_id)
         text = f"**{event_name}**"
@@ -206,7 +204,7 @@ async def confirm_register(callback: types.CallbackQuery, state: FSMContext):
         text += f"Дата: {event[2]}\n"
         text += f"Время: {event[3]}\n\n"
         text += "**Список участников:**\n"
-        
+
         total = 0
         for i, (nickname, photo_id, guests) in enumerate(participants, 1):
             is_me = " (вы)" if nickname == callback.from_user.username else ""
@@ -216,9 +214,9 @@ async def confirm_register(callback: types.CallbackQuery, state: FSMContext):
             else:
                 text += f"{i}. {nickname}{is_me}\n"
             total += 1
-        
+
         text += f"\n**Всего: {total} чел.**"
-        
+
         await callback.message.edit_text(
             text,
             parse_mode="Markdown",
@@ -227,7 +225,7 @@ async def confirm_register(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer("✅ Вы записаны!")
     else:
         await callback.answer("❌ Ошибка при записи", show_alert=True)
-    
+
     await state.clear()
 
 
@@ -235,18 +233,18 @@ async def confirm_register(callback: types.CallbackQuery, state: FSMContext):
 async def cancel_guests(callback: types.CallbackQuery, state: FSMContext):
     """Обработчик кнопки 'Отмена' при выборе гостей"""
     await state.clear()
-    
+
     event_id = int(callback.data.split("_")[2])
     event = await get_event_by_id(event_id)
-    
+
     if not event:
         await callback.answer("Мероприятие не найдено", show_alert=True)
         return
-    
+
     _, event_name, event_date, event_time, event_address = event
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
-    
+
     text = f"**{event_name}**"
     if event_address:
         text += f". {event_address}\n"
@@ -254,7 +252,7 @@ async def cancel_guests(callback: types.CallbackQuery, state: FSMContext):
         text += "\n"
     text += f"Дата: {event_date}\n"
     text += f"Время: {event_time}\n\n"
-    
+
     if participants:
         text += "**Список участников:**\n"
         total = 0
@@ -269,12 +267,12 @@ async def cancel_guests(callback: types.CallbackQuery, state: FSMContext):
         text += f"\n**Всего: {total} чел.**"
     else:
         text += "Пока никого нет. Будьте первым!"
-    
+
     if registered:
         keyboard = get_registered_keyboard(event_id)
     else:
         keyboard = get_guests_keyboard(event_id)
-    
+
     await callback.message.edit_text(
         text,
         parse_mode="Markdown",
@@ -305,7 +303,7 @@ async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
         text += f"Дата: {event[2]}\n"
         text += f"Время: {event[3]}\n\n"
         text += "**Список участников:**\n"
-        
+
         total = 0
         for i, (nickname, photo_id, guests) in enumerate(participants, 1):
             is_me = " (вы)" if nickname == callback.from_user.username else ""
@@ -315,12 +313,12 @@ async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
             else:
                 text += f"{i}. {nickname}{is_me}\n"
             total += 1
-        
+
         if participants:
             text += f"\n**Всего: {total} чел.**"
         else:
             text += "Пока никого нет."
-        
+
         await callback.message.edit_text(
             text,
             parse_mode="Markdown",
