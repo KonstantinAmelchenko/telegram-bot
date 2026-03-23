@@ -23,6 +23,7 @@ from keyboards import (
 )
 from .profile import ProfileSetup
 
+
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -41,6 +42,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
             reply_markup=get_cancel_keyboard()
         )
         await state.set_state(ProfileSetup.waiting_for_nickname)
+
 
 @dp.message(Command("events"))
 async def cmd_events(message: types.Message, state: FSMContext):
@@ -62,25 +64,25 @@ async def cmd_events(message: types.Message, state: FSMContext):
         )
         await state.set_state(ProfileSetup.waiting_for_nickname)
 
+
 @dp.message(F.text == "📋 Мероприятия")
 async def btn_menu(message: types.Message, state: FSMContext):
     await cmd_events(message, state)
+
 
 @dp.callback_query(F.data.startswith("event_"))
 async def select_event(callback: types.CallbackQuery, state: FSMContext):
     event_id = int(callback.data.split("_")[1])
     event = await get_event_by_id(event_id)
-    
     if not event:
         await callback.answer("Мероприятие не найдено или удалено", show_alert=True)
         return
 
     _, event_name, event_date, event_time, event_address = event
-    
+
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
-    
-    # ✅ Адрес на той же строке с названием, через точку
+
     text = f"**{event_name}**"
     if event_address:
         text += f". {event_address}\n"
@@ -88,7 +90,7 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
         text += "\n"
     text += f"Дата: {event_date}\n"
     text += f"Время: {event_time}\n\n"
-    
+
     if participants:
         text += "**Список участников:**\n"
         for i, (nickname, photo_id) in enumerate(participants, 1):
@@ -108,10 +110,9 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
         reply_markup=keyboard
     )
 
-    # Отправка фото и сохранение ID сообщений
     photos_with_ids = [(nickname, photo_id) for nickname, photo_id in participants if photo_id]
     photo_message_ids = []
-    
+
     if photos_with_ids:
         for i in range(0, len(photos_with_ids), 10):
             batch = photos_with_ids[i:i+10]
@@ -121,25 +122,24 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
                 photo_message_ids.extend([msg.message_id for msg in result])
             except Exception as e:
                 logging.error(f"Failed to send media group: {e}")
-    
+
     await state.update_data(photo_message_ids=photo_message_ids)
+
 
 @dp.callback_query(F.data.startswith("register_"))
 async def register_event(callback: types.CallbackQuery, state: FSMContext):
     event_id = int(callback.data.split("_")[1])
     event = await get_event_by_id(event_id)
-    
     if not event:
         await callback.answer("Мероприятие не найдено", show_alert=True)
         return
-    
+
     event_name = event[1]
     event_address = event[4]
     success = await register_for_event(callback.from_user.id, event_id)
-    
+
     if success:
         participants = await get_event_participants(event_id)
-        # ✅ Адрес на той же строке с названием, через точку
         text = f"**{event_name}**"
         if event_address:
             text += f". {event_address}\n"
@@ -160,7 +160,9 @@ async def register_event(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer("✅ Вы записаны!")
     else:
         await callback.answer("❌ Ошибка при записи", show_alert=True)
-        @dp.callback_query(F.data.startswith("unregister_"))
+
+
+@dp.callback_query(F.data.startswith("unregister_"))
 async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
     event_id = int(callback.data.split("_")[1])
     event = await get_event_by_id(event_id)
@@ -174,7 +176,7 @@ async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
 
     if success:
         participants = await get_event_participants(event_id)
-        text = f"**{event_name}** "
+        text = f"**{event_name}**"
         if event_address:
             text += f". {event_address}\n"
         else:
@@ -194,6 +196,7 @@ async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer("✅ Вы отменили запись")
     else:
         await callback.answer("❌ Ошибка при отмене записи", show_alert=True)
+
 
 @dp.callback_query(F.data == "back")
 async def go_back(callback: types.CallbackQuery, state: FSMContext):
