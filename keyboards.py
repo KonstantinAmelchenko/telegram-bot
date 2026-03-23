@@ -32,7 +32,7 @@ def get_guests_keyboard(event_id: int):
         [InlineKeyboardButton(text="👥 +1 человек", callback_data=f"guests_{event_id}_1")],
         [InlineKeyboardButton(text="👥 +2 человека", callback_data=f"guests_{event_id}_2")],
         [InlineKeyboardButton(text="👥 +3 человека", callback_data=f"guests_{event_id}_3")],
-        [InlineKeyboardButton(text="🔙 Отмена", callback_data=f"event_{event_id}")]
+        [InlineKeyboardButton(text="🔙 Отмена", callback_data=f"cancel_guests_{event_id}")]
     ])
 
 def get_register_keyboard(event_id: int):

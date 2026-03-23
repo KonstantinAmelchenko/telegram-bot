@@ -78,6 +78,7 @@ async def btn_menu(message: types.Message, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("event_"))
 async def select_event(callback: types.CallbackQuery, state: FSMContext):
+    await state.clear()  # ✅ Очищаем состояние при входе в мероприятие
     event_id = int(callback.data.split("_")[1])
     event = await get_event_by_id(event_id)
     if not event:
@@ -85,7 +86,6 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
         return
 
     _, event_name, event_date, event_time, event_address = event
-
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
 
@@ -175,7 +175,7 @@ async def select_guests(callback: types.CallbackQuery, state: FSMContext):
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"confirm_register_{event_id}")],
-            [InlineKeyboardButton(text="🔙 Назад", callback_data=f"event_{event_id}")]
+            [InlineKeyboardButton(text="🔙 Назад", callback_data=f"cancel_guests_{event_id}")]
         ])
     )
     await callback.answer()
@@ -229,6 +229,58 @@ async def confirm_register(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer("❌ Ошибка при записи", show_alert=True)
     
     await state.clear()
+
+
+@dp.callback_query(F.data.startswith("cancel_guests_"))
+async def cancel_guests(callback: types.CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Отмена' при выборе гостей"""
+    await state.clear()
+    
+    event_id = int(callback.data.split("_")[2])
+    event = await get_event_by_id(event_id)
+    
+    if not event:
+        await callback.answer("Мероприятие не найдено", show_alert=True)
+        return
+    
+    _, event_name, event_date, event_time, event_address = event
+    registered = await check_user_registration(callback.from_user.id, event_id)
+    participants = await get_event_participants(event_id)
+    
+    text = f"**{event_name}**"
+    if event_address:
+        text += f". {event_address}\n"
+    else:
+        text += "\n"
+    text += f"Дата: {event_date}\n"
+    text += f"Время: {event_time}\n\n"
+    
+    if participants:
+        text += "**Список участников:**\n"
+        total = 0
+        for i, (nickname, photo_id, guests) in enumerate(participants, 1):
+            is_me = " (вы)" if nickname == callback.from_user.username else ""
+            if guests > 0:
+                text += f"{i}. {nickname} +{guests}{is_me}\n"
+                total += guests
+            else:
+                text += f"{i}. {nickname}{is_me}\n"
+            total += 1
+        text += f"\n**Всего: {total} чел.**"
+    else:
+        text += "Пока никого нет. Будьте первым!"
+    
+    if registered:
+        keyboard = get_registered_keyboard(event_id)
+    else:
+        keyboard = get_guests_keyboard(event_id)
+    
+    await callback.message.edit_text(
+        text,
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+    await callback.answer()
 
 
 @dp.callback_query(F.data.startswith("unregister_"))
