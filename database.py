@@ -49,7 +49,7 @@ async def init_db():
         try:
             await db.execute('ALTER TABLE registrations ADD COLUMN guests_count INTEGER DEFAULT 0')
         except:
-            pass  # Колонка уже существует
+            pass
         
         await db.execute('''
         CREATE TABLE IF NOT EXISTS events (
@@ -137,7 +137,6 @@ async def get_all_event_counts():
         result = await cursor.fetchall()
         return {row[0]: row[1] for row in result}
 
-# === ФУНКЦИИ ДЛЯ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ ===
 async def create_event(name: str, date: str, time: str, address: str = ""):
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute(

@@ -6,11 +6,13 @@ from config import ADMIN_ID
 from . import dp
 from database import create_event, delete_event, get_all_events
 
+
 class EventCreation(StatesGroup):
     waiting_for_name = State()
     waiting_for_date = State()
     waiting_for_time = State()
     waiting_for_address = State()
+
 
 @dp.message(Command("create_event"))
 async def cmd_create_event(message: types.Message, state: FSMContext):
@@ -29,6 +31,7 @@ async def cmd_create_event(message: types.Message, state: FSMContext):
     )
     await state.set_state(EventCreation.waiting_for_name)
 
+
 @dp.message(EventCreation.waiting_for_name)
 async def process_event_name(message: types.Message, state: FSMContext):
     if message.text == "❌ Отмена":
@@ -39,6 +42,7 @@ async def process_event_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
     await message.answer("🗓 Введите дату (например, 25.05.2024):")
     await state.set_state(EventCreation.waiting_for_date)
+
 
 @dp.message(EventCreation.waiting_for_date)
 async def process_event_date(message: types.Message, state: FSMContext):
@@ -51,6 +55,7 @@ async def process_event_date(message: types.Message, state: FSMContext):
     await message.answer("⏰ Введите время (например, 14:00):")
     await state.set_state(EventCreation.waiting_for_time)
 
+
 @dp.message(EventCreation.waiting_for_time)
 async def process_event_time(message: types.Message, state: FSMContext):
     if message.text == "❌ Отмена":
@@ -62,6 +67,7 @@ async def process_event_time(message: types.Message, state: FSMContext):
     await message.answer("📍 Введите адрес (или '⏭️ Пропустить'):")
     await state.set_state(EventCreation.waiting_for_address)
 
+
 @dp.message(EventCreation.waiting_for_address)
 async def process_event_address(message: types.Message, state: FSMContext):
     if message.text == "❌ Отмена":
@@ -69,26 +75,28 @@ async def process_event_address(message: types.Message, state: FSMContext):
         await message.answer("Отменено.", reply_markup=types.ReplyKeyboardRemove())
         return
     
-    address = ""
+    # ✅ Теперь address сохраняется в state, как и остальные параметры
     if message.text == "⏭️ Пропустить":
-        address = ""
+        await state.update_data(address="")
     else:
-        address = message.text
+        await state.update_data(address=message.text)
     
+    # ✅ Получаем все данные из state (теперь их 4: name, date, time, address)
     data = await state.get_data()
-    event_id = await create_event(data['name'], data['date'], data['time'], address)
+    event_id = await create_event(data['name'], data['date'], data['time'], data['address'])
     
     await state.clear()
     await message.answer(
         f"✅ **Мероприятие создано!**\n\n"
-        f"📅 {data['name']}\n"
-        f"🗓 {data['date']}\n"
+        f"🗓 {data['name']}\n"
+        f"📍 {data['address'] if data['address'] else 'Адрес не указан'}\n\n"
+        f"📅 {data['date']}\n"
         f"⏰ {data['time']}\n"
-        f"📍 {address if address else 'Адрес не указан'}\n\n"
         f"ID: {event_id}",
         parse_mode="Markdown",
         reply_markup=types.ReplyKeyboardRemove()
     )
+
 
 @dp.message(Command("delete_event"))
 async def cmd_delete_event(message: types.Message):
@@ -104,6 +112,7 @@ async def cmd_delete_event(message: types.Message):
     
     await delete_event(event_id)
     await message.answer(f"✅ Мероприятие {event_id} удалено.")
+
 
 @dp.message(Command("list_events"))
 async def cmd_list_events(message: types.Message):
