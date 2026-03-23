@@ -40,11 +40,17 @@ async def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
             event_id INTEGER,
+            guests_count INTEGER DEFAULT 0,
             UNIQUE(user_id, event_id)
         )
         ''')
         
-        # Таблица мероприятий с полем address
+        # Добавляем колонку guests_count если её нет
+        try:
+            await db.execute('ALTER TABLE registrations ADD COLUMN guests_count INTEGER DEFAULT 0')
+        except:
+            pass  # Колонка уже существует
+        
         await db.execute('''
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,12 +81,12 @@ async def get_user_profile(user_id: int):
         )
         return await cursor.fetchone()
 
-async def register_for_event(user_id: int, event_id: int):
+async def register_for_event(user_id: int, event_id: int, guests_count: int = 0):
     async with aiosqlite.connect("events.db") as db:
         try:
             await db.execute(
-                'INSERT INTO registrations (user_id, event_id) VALUES (?, ?)',
-                (user_id, event_id)
+                'INSERT INTO registrations (user_id, event_id, guests_count) VALUES (?, ?, ?)',
+                (user_id, event_id, guests_count)
             )
             await db.commit()
             return True
@@ -114,7 +120,7 @@ async def unregister_from_event(user_id: int, event_id: int):
 async def get_event_participants(event_id: int):
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute('''
-        SELECT p.nickname, p.photo_id
+        SELECT p.nickname, p.photo_id, r.guests_count
         FROM registrations r
         JOIN profiles p ON r.user_id = p.user_id
         WHERE r.event_id = ?
@@ -132,7 +138,6 @@ async def get_all_event_counts():
         return {row[0]: row[1] for row in result}
 
 # === ФУНКЦИИ ДЛЯ УПРАВЛЕНИЯ МЕРОПРИЯТИЯМИ ===
-
 async def create_event(name: str, date: str, time: str, address: str = ""):
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute(
