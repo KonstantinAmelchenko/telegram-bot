@@ -169,13 +169,12 @@ async def select_guests(callback: types.CallbackQuery, state: FSMContext):
 
     text += "**Подтвердить запись?**"
 
-    # ✅ ИСПРАВЛЕНО: callback_data=f"cancel_guests_{event_id}"
     await callback.message.edit_text(
         text,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"confirm_register_{event_id}")],
-            [InlineKeyboardButton(text="🔙 Назад", callback_data=f"cancel_guests_{event_id}")]
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="back")]
         ])
     )
     await callback.answer()
