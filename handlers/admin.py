@@ -87,11 +87,11 @@ async def process_event_address(message: types.Message, state: FSMContext):
     
     await state.clear()
     await message.answer(
-        f"✅ **Мероприятие создано!**\n\n"
+        f"**Мероприятие создано!**\n\n"
         f"🗓 {data['name']}\n"
-        f"📍 {data['address'] if data['address'] else 'Адрес не указан'}\n\n"
+        f"📍 {data['address'] if data['address'] else 'Адрес не указан'}\n"
         f"📅 {data['date']}\n"
-        f"⏰ {data['time']}\n"
+        f"⏰ {data['time']}\n\n"
         f"ID: {event_id}",
         parse_mode="Markdown",
         reply_markup=types.ReplyKeyboardRemove()
