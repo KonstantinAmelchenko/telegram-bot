@@ -130,7 +130,7 @@ async def get_event_participants(event_id: int):
 async def get_all_event_counts():
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute('''
-        SELECT event_id, COUNT(*) as count
+        SELECT event_id, SUM(guests_count + 1) as count
         FROM registrations
         GROUP BY event_id
         ''')
