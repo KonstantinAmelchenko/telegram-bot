@@ -13,7 +13,11 @@ async def main():
     await init_db()
     await set_commands(bot)
     logging.info("Бот запускается...")
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()  # ✅ Закрываем сессию
+        logging.info("Бот остановлен")
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # ✅ Исправлено: было "if name == "main""
     asyncio.run(main())
