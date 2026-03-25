@@ -2,6 +2,7 @@ from aiogram import types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.exceptions import TelegramBadRequest
 from . import dp
 from database import save_profile, get_user_profile, check_user_registration, get_all_event_counts, get_all_events
 from keyboards import (
@@ -202,10 +203,24 @@ async def edit_photo(callback: types.CallbackQuery, state: FSMContext):
 async def show_events_from_profile(callback: types.CallbackQuery):
     registrations = await check_user_registration(callback.from_user.id)
     event_counts = await get_all_event_counts()
-    events = await get_all_events()  # ✅ ДОБАВЛЕНО!
-    await callback.message.edit_text(
-        "📋 **Мероприятия**\n\nВыберите мероприятие:",
-        parse_mode="Markdown",
-        reply_markup=get_events_keyboard(registrations, event_counts, events)  # ✅ 3 АРГУМЕНТА!
-    )
+    events = await get_all_events()
+    events_text = "📋 **Мероприятия**\n\nВыберите мероприятие:"
+    events_keyboard = get_events_keyboard(registrations, event_counts, events)
+    try:
+        await callback.message.edit_text(
+            events_text,
+            parse_mode="Markdown",
+            reply_markup=events_keyboard
+        )
+    except TelegramBadRequest:
+        # Если callback пришел из сообщения с фото, edit_text невозможен.
+        await callback.message.answer(
+            events_text,
+            parse_mode="Markdown",
+            reply_markup=events_keyboard
+        )
+        try:
+            await callback.message.delete()
+        except TelegramBadRequest:
+            pass
     await callback.answer()
