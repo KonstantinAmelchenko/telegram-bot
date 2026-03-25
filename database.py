@@ -10,7 +10,7 @@ def format_event_date(date_str: str) -> str:
             'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
         ]
         return f"{day} {months[month - 1]}"
-    except:
+    except (ValueError, IndexError):
         return date_str
 
 def get_day_of_week(date_str: str) -> str:
@@ -20,7 +20,7 @@ def get_day_of_week(date_str: str) -> str:
         date = datetime(year, month, day)
         days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
         return days[date.weekday()]
-    except:
+    except (ValueError, IndexError):
         return ""
 
 async def init_db():
@@ -48,7 +48,7 @@ async def init_db():
         # Добавляем колонку guests_count если её нет
         try:
             await db.execute('ALTER TABLE registrations ADD COLUMN guests_count INTEGER DEFAULT 0')
-        except:
+        except Exception:
             pass
         
         await db.execute('''
