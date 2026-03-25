@@ -23,19 +23,16 @@ async def cmd_profile(message: types.Message, state: FSMContext):
                 await message.answer_photo(
                     photo=profile[1],
                     caption=text,
-                    parse_mode="Markdown",
                     reply_markup=get_profile_keyboard()
                 )
             except Exception:
                 await message.answer(
                     text + "\n⚠️ Фото устарело.",
-                    parse_mode="Markdown",
                     reply_markup=get_profile_keyboard()
                 )
         else:
             await message.answer(
                 text,
-                parse_mode="Markdown",
                 reply_markup=get_profile_keyboard()
             )
     else:
@@ -61,19 +58,16 @@ async def btn_profile(message: types.Message, state: FSMContext):
                 await message.answer_photo(
                     photo=profile[1],
                     caption=text,
-                    parse_mode="Markdown",
                     reply_markup=get_profile_keyboard()
                 )
             except Exception:
                 await message.answer(
                     text + "\n⚠️ Фото устарело.",
-                    parse_mode="Markdown",
                     reply_markup=get_profile_keyboard()
                 )
         else:
             await message.answer(
                 text,
-                parse_mode="Markdown",
                 reply_markup=get_profile_keyboard()
             )
     else:
@@ -95,7 +89,6 @@ async def process_nickname(message: types.Message, state: FSMContext):
     await state.update_data(nickname=nickname)
     await message.answer(
         f"Отлично! Ник: {nickname}\n\nОтправь фото или '⏭️ Пропустить':",
-        parse_mode="Markdown",
         reply_markup=get_skip_keyboard()
     )
     await state.set_state(ProfileSetup.waiting_for_photo)
@@ -172,28 +165,27 @@ async def show_profile(callback: types.CallbackQuery):
                 await callback.message.answer_photo(
                     photo=profile[1],
                     caption=text,
-                    parse_mode="Markdown",
                     reply_markup=get_profile_keyboard()
                 )
             except Exception:
                 await callback.message.answer(
                     text + "\n⚠️ Фото устарело.",
-                    parse_mode="Markdown",
                     reply_markup=get_profile_keyboard()
                 )
             await callback.message.delete()
         else:
             await callback.message.edit_text(
                 text,
-                parse_mode="Markdown",
                 reply_markup=get_profile_keyboard()
             )
+        await callback.answer()
     else:
         await callback.answer("Сначала настройте профиль! /start", show_alert=True)
 
 @dp.callback_query(F.data == "edit_nickname")
 async def edit_nickname(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
+    await callback.answer()
     await callback.message.delete()
     await callback.message.answer("Введите новый ник (2-20 символов):", reply_markup=get_cancel_keyboard())
     await state.set_state(ProfileSetup.editing_nickname)
@@ -201,6 +193,7 @@ async def edit_nickname(callback: types.CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data == "edit_photo")
 async def edit_photo(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
+    await callback.answer()
     await callback.message.delete()
     await callback.message.answer("Отправьте новое фото:", reply_markup=get_cancel_keyboard())
     await state.set_state(ProfileSetup.editing_photo)

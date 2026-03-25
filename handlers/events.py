@@ -4,6 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InputMediaPhoto
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from html import escape
 import logging
 from . import dp
 from database import (
@@ -89,26 +90,27 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
 
-    text = f"**{event_name}**"
+    text = f"<b>{escape(event_name)}</b>"
     if event_address:
-        text += f". {event_address}\n"
+        text += f". {escape(event_address)}\n"
     else:
         text += "\n"
-    text += f"Дата: {event_date}\n"
-    text += f"Время: {event_time}\n\n"
+    text += f"Дата: {escape(event_date)}\n"
+    text += f"Время: {escape(event_time)}\n\n"
 
     if participants:
-        text += "**Список участников:**\n"
+        text += "<b>Список участников:</b>\n"
         total = 0
-        for i, (nickname, photo_id, guests) in enumerate(participants, 1):
-            is_me = " (вы)" if nickname == callback.from_user.username else ""
+        for i, (participant_user_id, nickname, photo_id, guests) in enumerate(participants, 1):
+            safe_nickname = escape(nickname or "Без ника")
+            is_me = " (вы)" if participant_user_id == callback.from_user.id else ""
             if guests > 0:
-                text += f"{i}. {nickname} +{guests}{is_me}\n"
+                text += f"{i}. {safe_nickname} +{guests}{is_me}\n"
                 total += guests
             else:
-                text += f"{i}. {nickname}{is_me}\n"
+                text += f"{i}. {safe_nickname}{is_me}\n"
             total += 1
-        text += f"\n**Всего: {total} чел.**"
+        text += f"\n<b>Всего: {total} чел.</b>"
     else:
         text += "Пока никого нет. Будьте первым!"
 
@@ -119,11 +121,11 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
 
     await callback.message.edit_text(
         text,
-        parse_mode="Markdown",
+        parse_mode="HTML",
         reply_markup=keyboard
     )
 
-    photos_with_ids = [(nickname, photo_id) for nickname, photo_id, _ in participants if photo_id]
+    photos_with_ids = [(nickname, photo_id) for _, nickname, photo_id, _ in participants if photo_id]
     photo_message_ids = []
 
     if photos_with_ids:
@@ -137,6 +139,7 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
                 logging.error(f"Failed to send media group: {e}")
 
     await state.update_data(photo_message_ids=photo_message_ids)
+    await callback.answer()
 
 
 @dp.callback_query(F.data.startswith("guests_"))
@@ -154,24 +157,24 @@ async def select_guests(callback: types.CallbackQuery, state: FSMContext):
     event_name = event[1]
     event_address = event[4]
 
-    text = f"**{event_name}**"
+    text = f"<b>{escape(event_name)}</b>"
     if event_address:
-        text += f". {event_address}\n"
+        text += f". {escape(event_address)}\n"
     else:
         text += "\n"
-    text += f"Дата: {event[2]}\n"
-    text += f"Время: {event[3]}\n\n"
+    text += f"Дата: {escape(event[2])}\n"
+    text += f"Время: {escape(event[3])}\n\n"
 
     if guests_count > 0:
         text += f"👥 Вы записываетесь +{guests_count} гост(ей)\n\n"
     else:
         text += "👤 Вы записываетесь один\n\n"
 
-    text += "**Подтвердить запись?**"
+    text += "<b>Подтвердить запись?</b>"
 
     await callback.message.edit_text(
         text,
-        parse_mode="Markdown",
+        parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"confirm_register_{event_id}")],
             [InlineKeyboardButton(text="🔙 Назад", callback_data="back")]
@@ -196,30 +199,31 @@ async def confirm_register(callback: types.CallbackQuery, state: FSMContext):
 
     if success:
         participants = await get_event_participants(event_id)
-        text = f"**{event_name}**"
+        text = f"<b>{escape(event_name)}</b>"
         if event_address:
-            text += f". {event_address}\n"
+            text += f". {escape(event_address)}\n"
         else:
             text += "\n"
-        text += f"Дата: {event[2]}\n"
-        text += f"Время: {event[3]}\n\n"
-        text += "**Список участников:**\n"
+        text += f"Дата: {escape(event[2])}\n"
+        text += f"Время: {escape(event[3])}\n\n"
+        text += "<b>Список участников:</b>\n"
 
         total = 0
-        for i, (nickname, photo_id, guests) in enumerate(participants, 1):
-            is_me = " (вы)" if nickname == callback.from_user.username else ""
+        for i, (participant_user_id, nickname, photo_id, guests) in enumerate(participants, 1):
+            safe_nickname = escape(nickname or "Без ника")
+            is_me = " (вы)" if participant_user_id == callback.from_user.id else ""
             if guests > 0:
-                text += f"{i}. {nickname} +{guests}{is_me}\n"
+                text += f"{i}. {safe_nickname} +{guests}{is_me}\n"
                 total += guests
             else:
-                text += f"{i}. {nickname}{is_me}\n"
+                text += f"{i}. {safe_nickname}{is_me}\n"
             total += 1
 
-        text += f"\n**Всего: {total} чел.**"
+        text += f"\n<b>Всего: {total} чел.</b>"
 
         await callback.message.edit_text(
             text,
-            parse_mode="Markdown",
+            parse_mode="HTML",
             reply_markup=get_registered_keyboard(event_id)
         )
         await callback.answer("✅ Вы записаны!")
@@ -227,58 +231,6 @@ async def confirm_register(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer("❌ Ошибка при записи", show_alert=True)
 
     await state.clear()
-
-
-# ✅ ДОБАВЛЕН ОБРАБОТЧИК cancel_guests_
-@dp.callback_query(F.data.startswith("cancel_guests_"))
-async def cancel_guests(callback: types.CallbackQuery, state: FSMContext):
-    await state.clear()
-    event_id = int(callback.data.split("_")[2])
-    event = await get_event_by_id(event_id)
-
-    if not event:
-        await callback.answer("Мероприятие не найдено", show_alert=True)
-        return
-
-    _, event_name, event_date, event_time, event_address = event
-    registered = await check_user_registration(callback.from_user.id, event_id)
-    participants = await get_event_participants(event_id)
-
-    text = f"**{event_name}**"
-    if event_address:
-        text += f". {event_address}\n"
-    else:
-        text += "\n"
-    text += f"Дата: {event_date}\n"
-    text += f"Время: {event_time}\n\n"
-
-    if participants:
-        text += "**Список участников:**\n"
-        total = 0
-        for i, (nickname, photo_id, guests) in enumerate(participants, 1):
-            is_me = " (вы)" if nickname == callback.from_user.username else ""
-            if guests > 0:
-                text += f"{i}. {nickname} +{guests}{is_me}\n"
-                total += guests
-            else:
-                text += f"{i}. {nickname}{is_me}\n"
-            total += 1
-        text += f"\n**Всего: {total} чел.**"
-    else:
-        text += "Пока никого нет. Будьте первым!"
-
-    if registered:
-        keyboard = get_registered_keyboard(event_id)
-    else:
-        keyboard = get_guests_keyboard(event_id)
-
-    await callback.message.edit_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=keyboard
-    )
-    await callback.answer()
-
 
 @dp.callback_query(F.data.startswith("unregister_"))
 async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
@@ -294,33 +246,34 @@ async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
 
     if success:
         participants = await get_event_participants(event_id)
-        text = f"**{event_name}**"
+        text = f"<b>{escape(event_name)}</b>"
         if event_address:
-            text += f". {event_address}\n"
+            text += f". {escape(event_address)}\n"
         else:
             text += "\n"
-        text += f"Дата: {event[2]}\n"
-        text += f"Время: {event[3]}\n\n"
-        text += "**Список участников:**\n"
+        text += f"Дата: {escape(event[2])}\n"
+        text += f"Время: {escape(event[3])}\n\n"
+        text += "<b>Список участников:</b>\n"
 
         total = 0
-        for i, (nickname, photo_id, guests) in enumerate(participants, 1):
-            is_me = " (вы)" if nickname == callback.from_user.username else ""
+        for i, (participant_user_id, nickname, photo_id, guests) in enumerate(participants, 1):
+            safe_nickname = escape(nickname or "Без ника")
+            is_me = " (вы)" if participant_user_id == callback.from_user.id else ""
             if guests > 0:
-                text += f"{i}. {nickname} +{guests}{is_me}\n"
+                text += f"{i}. {safe_nickname} +{guests}{is_me}\n"
                 total += guests
             else:
-                text += f"{i}. {nickname}{is_me}\n"
+                text += f"{i}. {safe_nickname}{is_me}\n"
             total += 1
 
         if participants:
-            text += f"\n**Всего: {total} чел.**"
+            text += f"\n<b>Всего: {total} чел.</b>"
         else:
             text += "Пока никого нет."
 
         await callback.message.edit_text(
             text,
-            parse_mode="Markdown",
+            parse_mode="HTML",
             reply_markup=get_guests_keyboard(event_id)
         )
         await callback.answer("✅ Вы отменили запись")

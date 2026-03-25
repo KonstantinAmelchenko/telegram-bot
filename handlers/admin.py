@@ -2,6 +2,7 @@ from aiogram import types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from html import escape
 from config import ADMIN_ID
 from . import dp
 from database import create_event, delete_event, get_all_events
@@ -87,13 +88,13 @@ async def process_event_address(message: types.Message, state: FSMContext):
     
     await state.clear()
     await message.answer(
-        f"**Мероприятие создано!**\n\n"
-        f"🗓 {data['name']}\n"
-        f"📍 {data['address'] if data['address'] else 'Адрес не указан'}\n"
-        f"📅 {data['date']}\n"
-        f"⏰ {data['time']}\n\n"
+        f"<b>Мероприятие создано!</b>\n\n"
+        f"🗓 {escape(data['name'])}\n"
+        f"📍 {escape(data['address']) if data['address'] else 'Адрес не указан'}\n"
+        f"📅 {escape(data['date'])}\n"
+        f"⏰ {escape(data['time'])}\n\n"
         f"ID: {event_id}",
-        parse_mode="Markdown",
+        parse_mode="HTML",
         reply_markup=types.ReplyKeyboardRemove()
     )
 
@@ -126,10 +127,10 @@ async def cmd_list_events(message: types.Message):
         await message.answer("📭 Нет активных мероприятий.")
         return
     
-    text = "📋 **Список мероприятий:**\n\n"
+    text = "📋 Список мероприятий:\n\n"
     for event_id, name, date, time, address in events:
         text += f"{event_id}. {name} | {date} {time}\n"
         if address:
             text += f"   📍 {address}\n"
     
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text)

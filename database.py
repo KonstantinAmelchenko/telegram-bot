@@ -120,7 +120,7 @@ async def unregister_from_event(user_id: int, event_id: int):
 async def get_event_participants(event_id: int):
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute('''
-        SELECT p.nickname, p.photo_id, r.guests_count
+        SELECT p.user_id, p.nickname, p.photo_id, r.guests_count
         FROM registrations r
         JOIN profiles p ON r.user_id = p.user_id
         WHERE r.event_id = ?
@@ -149,7 +149,16 @@ async def create_event(name: str, date: str, time: str, address: str = ""):
 async def get_all_events():
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute(
-            'SELECT id, name, date, time, address FROM events WHERE is_active = 1 ORDER BY date, time'
+            '''
+            SELECT id, name, date, time, address
+            FROM events
+            WHERE is_active = 1
+            ORDER BY
+                substr(date, 7, 4),
+                substr(date, 4, 2),
+                substr(date, 1, 2),
+                time
+            '''
         )
         return await cursor.fetchall()
 
