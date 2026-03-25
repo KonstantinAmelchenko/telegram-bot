@@ -58,10 +58,17 @@ async def init_db():
             date TEXT NOT NULL,
             time TEXT NOT NULL,
             address TEXT,
+            max_people INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             is_active INTEGER DEFAULT 1
         )
         ''')
+
+        # Добавляем колонку max_people если её нет
+        try:
+            await db.execute('ALTER TABLE events ADD COLUMN max_people INTEGER')
+        except Exception:
+            pass
         
         await db.commit()
 
@@ -137,11 +144,11 @@ async def get_all_event_counts():
         result = await cursor.fetchall()
         return {row[0]: row[1] for row in result}
 
-async def create_event(name: str, date: str, time: str, address: str = ""):
+async def create_event(name: str, date: str, time: str, address: str = "", max_people: int = None):
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute(
-            'INSERT INTO events (name, date, time, address) VALUES (?, ?, ?, ?)',
-            (name, date, time, address)
+            'INSERT INTO events (name, date, time, address, max_people) VALUES (?, ?, ?, ?, ?)',
+            (name, date, time, address, max_people)
         )
         await db.commit()
         return cursor.lastrowid
@@ -165,7 +172,7 @@ async def get_all_events():
 async def get_event_by_id(event_id: int):
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute(
-            'SELECT id, name, date, time, address FROM events WHERE id = ? AND is_active = 1',
+            'SELECT id, name, date, time, address, max_people FROM events WHERE id = ? AND is_active = 1',
             (event_id,)
         )
         return await cursor.fetchone()

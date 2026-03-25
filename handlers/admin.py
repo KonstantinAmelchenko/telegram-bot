@@ -12,6 +12,7 @@ class EventCreation(StatesGroup):
     waiting_for_name = State()
     waiting_for_date = State()
     waiting_for_time = State()
+    waiting_for_max_people = State()
     waiting_for_address = State()
 
 
@@ -65,6 +66,28 @@ async def process_event_time(message: types.Message, state: FSMContext):
         return
     
     await state.update_data(time=message.text)
+    await message.answer("👥 Введите максимальное количество человек (например, 20):")
+    await state.set_state(EventCreation.waiting_for_max_people)
+
+
+@dp.message(EventCreation.waiting_for_max_people)
+async def process_event_max_people(message: types.Message, state: FSMContext):
+    if message.text == "❌ Отмена":
+        await state.clear()
+        await message.answer("Отменено.", reply_markup=types.ReplyKeyboardRemove())
+        return
+
+    try:
+        max_people = int(message.text.strip())
+    except (ValueError, AttributeError):
+        await message.answer("Введите целое число, например: 20")
+        return
+
+    if max_people <= 0:
+        await message.answer("Количество должно быть больше 0. Например: 20")
+        return
+
+    await state.update_data(max_people=max_people)
     await message.answer("📍 Введите адрес (или '⏭️ Пропустить'):")
     await state.set_state(EventCreation.waiting_for_address)
 
@@ -82,9 +105,15 @@ async def process_event_address(message: types.Message, state: FSMContext):
     else:
         await state.update_data(address=message.text)
     
-    # ✅ Получаем все данные из state (теперь их 4: name, date, time, address)
+    # Получаем все данные из state (name, date, time, max_people, address)
     data = await state.get_data()
-    event_id = await create_event(data['name'], data['date'], data['time'], data['address'])
+    event_id = await create_event(
+        data['name'],
+        data['date'],
+        data['time'],
+        data['address'],
+        data['max_people']
+    )
     
     await state.clear()
     await message.answer(
@@ -93,6 +122,7 @@ async def process_event_address(message: types.Message, state: FSMContext):
         f"📍 {escape(data['address']) if data['address'] else 'Адрес не указан'}\n"
         f"📅 {escape(data['date'])}\n"
         f"⏰ {escape(data['time'])}\n\n"
+        f"👥 Максимум: {data['max_people']}\n\n"
         f"ID: {event_id}",
         parse_mode="HTML",
         reply_markup=types.ReplyKeyboardRemove()

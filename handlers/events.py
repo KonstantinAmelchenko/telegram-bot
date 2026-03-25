@@ -31,6 +31,15 @@ class EventRegistration(StatesGroup):
     waiting_for_guests = State()
 
 
+def get_registered_total(participants: list) -> int:
+    return sum((guests or 0) + 1 for _, _, _, guests in participants)
+
+
+def build_registered_line(total: int, max_people: int) -> str:
+    limit_text = str(max_people) if max_people and max_people > 0 else "не указано"
+    return f"<b>Зарегистрировано: {total} из {limit_text}</b>"
+
+
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
     await state.clear()
@@ -86,9 +95,10 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer("Мероприятие не найдено или удалено", show_alert=True)
         return
 
-    _, event_name, event_date, event_time, event_address = event
+    _, event_name, event_date, event_time, event_address, max_people = event
     registered = await check_user_registration(callback.from_user.id, event_id)
     participants = await get_event_participants(event_id)
+    total = get_registered_total(participants)
 
     text = f"<b>{escape(event_name)}</b>"
     if event_address:
@@ -96,21 +106,18 @@ async def select_event(callback: types.CallbackQuery, state: FSMContext):
     else:
         text += "\n"
     text += f"Дата: {escape(event_date)}\n"
-    text += f"Время: {escape(event_time)}\n\n"
+    text += f"Время: {escape(event_time)}\n"
+    text += f"{build_registered_line(total, max_people)}\n\n"
 
     if participants:
         text += "<b>Список участников:</b>\n"
-        total = 0
         for i, (participant_user_id, nickname, photo_id, guests) in enumerate(participants, 1):
             safe_nickname = escape(nickname or "Без ника")
             is_me = " (вы)" if participant_user_id == callback.from_user.id else ""
             if guests > 0:
                 text += f"{i}. {safe_nickname} +{guests}{is_me}\n"
-                total += guests
             else:
                 text += f"{i}. {safe_nickname}{is_me}\n"
-            total += 1
-        text += f"\n<b>Всего: {total} чел.</b>"
     else:
         text += "Пока никого нет. Будьте первым!"
 
@@ -156,6 +163,7 @@ async def select_guests(callback: types.CallbackQuery, state: FSMContext):
 
     event_name = event[1]
     event_address = event[4]
+    max_people = event[5]
 
     text = f"<b>{escape(event_name)}</b>"
     if event_address:
@@ -163,7 +171,10 @@ async def select_guests(callback: types.CallbackQuery, state: FSMContext):
     else:
         text += "\n"
     text += f"Дата: {escape(event[2])}\n"
-    text += f"Время: {escape(event[3])}\n\n"
+    text += f"Время: {escape(event[3])}\n"
+    participants = await get_event_participants(event_id)
+    total = get_registered_total(participants)
+    text += f"{build_registered_line(total, max_people)}\n\n"
 
     if guests_count > 0:
         text += f"👥 Вы записываетесь +{guests_count} гост(ей)\n\n"
@@ -195,31 +206,29 @@ async def confirm_register(callback: types.CallbackQuery, state: FSMContext):
 
     event_name = event[1]
     event_address = event[4]
+    max_people = event[5]
     success = await register_for_event(callback.from_user.id, event_id, guests_count)
 
     if success:
         participants = await get_event_participants(event_id)
+        total = get_registered_total(participants)
         text = f"<b>{escape(event_name)}</b>"
         if event_address:
             text += f". {escape(event_address)}\n"
         else:
             text += "\n"
         text += f"Дата: {escape(event[2])}\n"
-        text += f"Время: {escape(event[3])}\n\n"
+        text += f"Время: {escape(event[3])}\n"
+        text += f"{build_registered_line(total, max_people)}\n\n"
         text += "<b>Список участников:</b>\n"
 
-        total = 0
         for i, (participant_user_id, nickname, photo_id, guests) in enumerate(participants, 1):
             safe_nickname = escape(nickname or "Без ника")
             is_me = " (вы)" if participant_user_id == callback.from_user.id else ""
             if guests > 0:
                 text += f"{i}. {safe_nickname} +{guests}{is_me}\n"
-                total += guests
             else:
                 text += f"{i}. {safe_nickname}{is_me}\n"
-            total += 1
-
-        text += f"\n<b>Всего: {total} чел.</b>"
 
         await callback.message.edit_text(
             text,
@@ -242,33 +251,31 @@ async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
 
     event_name = event[1]
     event_address = event[4]
+    max_people = event[5]
     success = await unregister_from_event(callback.from_user.id, event_id)
 
     if success:
         participants = await get_event_participants(event_id)
+        total = get_registered_total(participants)
         text = f"<b>{escape(event_name)}</b>"
         if event_address:
             text += f". {escape(event_address)}\n"
         else:
             text += "\n"
         text += f"Дата: {escape(event[2])}\n"
-        text += f"Время: {escape(event[3])}\n\n"
+        text += f"Время: {escape(event[3])}\n"
+        text += f"{build_registered_line(total, max_people)}\n\n"
         text += "<b>Список участников:</b>\n"
 
-        total = 0
         for i, (participant_user_id, nickname, photo_id, guests) in enumerate(participants, 1):
             safe_nickname = escape(nickname or "Без ника")
             is_me = " (вы)" if participant_user_id == callback.from_user.id else ""
             if guests > 0:
                 text += f"{i}. {safe_nickname} +{guests}{is_me}\n"
-                total += guests
             else:
                 text += f"{i}. {safe_nickname}{is_me}\n"
-            total += 1
 
-        if participants:
-            text += f"\n<b>Всего: {total} чел.</b>"
-        else:
+        if not participants:
             text += "Пока никого нет."
 
         await callback.message.edit_text(
