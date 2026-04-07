@@ -5,8 +5,8 @@ from typing import Optional
 
 import vk_api
 from dotenv import load_dotenv
+from vk_api.bot_longpoll import VkBotEventType, VkBotLongPoll
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
-from vk_api.longpoll import VkEventType, VkLongPoll
 
 from database import (
     create_telegram_link_for_vk,
@@ -87,17 +87,25 @@ def main() -> None:
 
     vk_session = vk_api.VkApi(token=VK_GROUP_TOKEN, api_version=VK_API_VERSION)
     vk = vk_session.get_api()
-    longpoll = VkLongPoll(vk_session, group_id=int(VK_GROUP_ID))
+    longpoll = VkBotLongPoll(vk_session, group_id=int(VK_GROUP_ID))
 
     logging.info("VK bot started (group_id=%s)", VK_GROUP_ID)
 
     for event in longpoll.listen():
-        if event.type != VkEventType.MESSAGE_NEW:
+        if event.type != VkBotEventType.MESSAGE_NEW:
             continue
 
-        text = normalize_text(event.text)
-        user_id = str(event.user_id)
-        logging.info("Incoming VK message: user_id=%s text=%s", user_id, event.text)
+        message_obj = event.object.get("message", {})
+        text_raw = message_obj.get("text", "")
+        from_id = message_obj.get("from_id")
+        peer_id = message_obj.get("peer_id")
+
+        if not from_id or not peer_id:
+            continue
+
+        text = normalize_text(text_raw)
+        user_id = str(from_id)
+        logging.info("Incoming VK message: user_id=%s text=%s", user_id, text_raw)
 
         if is_link_command(text):
             message = asyncio.run(build_link_message(user_id))
@@ -108,7 +116,7 @@ def main() -> None:
 
         try:
             vk.messages.send(
-                user_id=event.user_id,
+                peer_id=peer_id,
                 message=message,
                 random_id=int.from_bytes(os.urandom(4), byteorder="big"),
                 keyboard=keyboard,
