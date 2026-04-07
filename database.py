@@ -257,7 +257,22 @@ async def consume_vk_link_token(token: str, telegram_user_id: int) -> str:
         tg_row = await cursor.fetchone()
 
         if tg_row and tg_row[0] != target_app_user_id:
-            return "telegram_linked_to_other"
+            current_tg_app_user_id = tg_row[0]
+            cursor = await db.execute(
+                'SELECT 1 FROM vk_accounts WHERE app_user_id = ? LIMIT 1',
+                (current_tg_app_user_id,)
+            )
+            has_vk_for_current_tg_app_user = await cursor.fetchone()
+            if has_vk_for_current_tg_app_user:
+                return "telegram_linked_to_other"
+
+            # TG уже был создан отдельно (например, через /start), но еще не связан с VK.
+            # Безопасно переносим TG связь на app_user из токена VK.
+            await db.execute(
+                'UPDATE telegram_accounts SET app_user_id = ? WHERE telegram_user_id = ?',
+                (target_app_user_id, telegram_user_id)
+            )
+            tg_row = (target_app_user_id,)
 
         cursor = await db.execute(
             '''
