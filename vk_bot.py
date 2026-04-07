@@ -4,6 +4,7 @@ import os
 from typing import Optional
 
 import vk_api
+from dotenv import load_dotenv
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 from vk_api.longpoll import VkEventType, VkLongPoll
 
@@ -15,6 +16,7 @@ from database import (
 
 
 logging.basicConfig(level=logging.INFO)
+load_dotenv()
 
 VK_GROUP_TOKEN = os.getenv("VK_GROUP_TOKEN")
 VK_GROUP_ID = os.getenv("VK_GROUP_ID")
@@ -90,11 +92,12 @@ def main() -> None:
     logging.info("VK bot started (group_id=%s)", VK_GROUP_ID)
 
     for event in longpoll.listen():
-        if event.type != VkEventType.MESSAGE_NEW or not event.to_me:
+        if event.type != VkEventType.MESSAGE_NEW:
             continue
 
         text = normalize_text(event.text)
         user_id = str(event.user_id)
+        logging.info("Incoming VK message: user_id=%s text=%s", user_id, event.text)
 
         if is_link_command(text):
             message = asyncio.run(build_link_message(user_id))
@@ -103,12 +106,16 @@ def main() -> None:
                 "Привет! Нажмите кнопку «Привязать Telegram», чтобы связать аккаунты."
             )
 
-        vk.messages.send(
-            user_id=event.user_id,
-            message=message,
-            random_id=int.from_bytes(os.urandom(4), byteorder="big"),
-            keyboard=keyboard,
-        )
+        try:
+            vk.messages.send(
+                user_id=event.user_id,
+                message=message,
+                random_id=int.from_bytes(os.urandom(4), byteorder="big"),
+                keyboard=keyboard,
+            )
+            logging.info("VK response sent: user_id=%s", user_id)
+        except Exception:
+            logging.exception("Failed to send VK response: user_id=%s", user_id)
 
 
 if __name__ == "__main__":
