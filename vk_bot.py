@@ -75,6 +75,21 @@ def extract_message_fields(event) -> tuple[str, Optional[int], Optional[int], in
     return text_raw, from_id, peer_id, is_outgoing
 
 
+def extract_group_name(groups_response) -> str:
+    if isinstance(groups_response, list):
+        if groups_response and isinstance(groups_response[0], dict):
+            return groups_response[0].get("name", "unknown")
+        return "unknown"
+
+    if isinstance(groups_response, dict):
+        groups_list = groups_response.get("groups")
+        if isinstance(groups_list, list) and groups_list and isinstance(groups_list[0], dict):
+            return groups_list[0].get("name", "unknown")
+        return groups_response.get("name", "unknown")
+
+    return "unknown"
+
+
 async def build_link_message(vk_user_id: str) -> str:
     tg_user_id = await get_telegram_user_id_by_vk_id(vk_user_id)
     if tg_user_id:
@@ -119,7 +134,7 @@ def main() -> None:
 
     try:
         groups = vk.groups.getById(group_id=group_id)
-        group_name = groups[0].get("name", "unknown") if groups else "unknown"
+        group_name = extract_group_name(groups)
         logging.info("VK API auth OK: group_id=%s group_name=%s", group_id, group_name)
     except Exception:
         logging.exception("VK API auth check failed")

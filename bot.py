@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import threading
+import time
 from aiogram import Bot
 from config import BOT_TOKEN
 from database import init_db
@@ -27,11 +28,13 @@ def maybe_start_embedded_vk_bot() -> None:
         return
 
     def run_vk() -> None:
-        try:
-            from vk_bot import main as vk_main
-            vk_main()
-        except Exception:
-            logging.exception("Embedded VK bot crashed")
+        while True:
+            try:
+                from vk_bot import main as vk_main
+                vk_main()
+            except Exception:
+                logging.exception("Embedded VK bot crashed, restart in 5s")
+                time.sleep(5)
 
     thread = threading.Thread(target=run_vk, name="vk-bot-thread", daemon=True)
     thread.start()
