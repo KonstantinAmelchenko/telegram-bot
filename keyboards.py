@@ -46,12 +46,15 @@ def get_registered_keyboard(event_id: int):
         [InlineKeyboardButton(text="🔙 Назад", callback_data="back")]
     ])
 
-def get_profile_keyboard():
-    return InlineKeyboardMarkup(inline_keyboard=[
+def get_profile_keyboard(is_vk_linked: bool = True):
+    keyboard = [
         [InlineKeyboardButton(text="✏️ Изменить ник", callback_data="edit_nickname")],
         [InlineKeyboardButton(text="📷 Изменить фото", callback_data="edit_photo")],
-        [InlineKeyboardButton(text="📋 Мероприятия", callback_data="show_events")]
-    ])
+    ]
+    if not is_vk_linked:
+        keyboard.append([InlineKeyboardButton(text="🔗 Привязать VK", callback_data="link_vk_help")])
+    keyboard.append([InlineKeyboardButton(text="📋 Мероприятия", callback_data="show_events")])
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def get_main_menu_keyboard():
     return ReplyKeyboardMarkup(keyboard=[

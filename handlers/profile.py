@@ -4,7 +4,14 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.exceptions import TelegramBadRequest
 from . import dp
-from database import save_profile, get_user_profile, check_user_registration, get_all_event_counts, get_all_events
+from database import (
+    save_profile,
+    get_user_profile,
+    check_user_registration,
+    get_all_event_counts,
+    get_all_events,
+    get_vk_user_id_by_telegram_id
+)
 from keyboards import (
     get_profile_keyboard,
     get_main_menu_keyboard,
@@ -13,28 +20,45 @@ from keyboards import (
     get_events_keyboard
 )
 
+
+async def build_profile_text(telegram_user_id: int, nickname: str) -> str:
+    vk_user_id = await get_vk_user_id_by_telegram_id(telegram_user_id)
+    vk_status = f"✅ Привязан (ID: {vk_user_id})" if vk_user_id else "⬇️ Нажмите кнопку «Привязать VK»"
+    return (
+        f"Никнейм: {nickname}\n"
+        f"Telegram: ✅ Привязан (ID: {telegram_user_id})\n"
+        f"VK: {vk_status}"
+    )
+
+
+async def get_profile_markup(telegram_user_id: int):
+    vk_user_id = await get_vk_user_id_by_telegram_id(telegram_user_id)
+    return get_profile_keyboard(is_vk_linked=bool(vk_user_id))
+
+
 @dp.message(Command("profile"))
 async def cmd_profile(message: types.Message, state: FSMContext):
     await state.clear()
     profile = await get_user_profile(message.from_user.id)
     if profile and profile[0]:
-        text = f"Никнейм: {profile[0]}"
+        text = await build_profile_text(message.from_user.id, profile[0])
+        profile_markup = await get_profile_markup(message.from_user.id)
         if profile[1]:
             try:
                 await message.answer_photo(
                     photo=profile[1],
                     caption=text,
-                    reply_markup=get_profile_keyboard()
+                    reply_markup=profile_markup
                 )
             except Exception:
                 await message.answer(
                     text + "\n⚠️ Фото устарело.",
-                    reply_markup=get_profile_keyboard()
+                    reply_markup=profile_markup
                 )
         else:
             await message.answer(
                 text,
-                reply_markup=get_profile_keyboard()
+                reply_markup=profile_markup
             )
     else:
         await message.answer(
@@ -53,23 +77,24 @@ async def btn_profile(message: types.Message, state: FSMContext):
     await state.clear()
     profile = await get_user_profile(message.from_user.id)
     if profile and profile[0]:
-        text = f"Никнейм: {profile[0]}"
+        text = await build_profile_text(message.from_user.id, profile[0])
+        profile_markup = await get_profile_markup(message.from_user.id)
         if profile[1]:
             try:
                 await message.answer_photo(
                     photo=profile[1],
                     caption=text,
-                    reply_markup=get_profile_keyboard()
+                    reply_markup=profile_markup
                 )
             except Exception:
                 await message.answer(
                     text + "\n⚠️ Фото устарело.",
-                    reply_markup=get_profile_keyboard()
+                    reply_markup=profile_markup
                 )
         else:
             await message.answer(
                 text,
-                reply_markup=get_profile_keyboard()
+                reply_markup=profile_markup
             )
     else:
         await message.answer(
@@ -112,7 +137,7 @@ async def process_edit_nickname(message: types.Message, state: FSMContext):
 
     await message.answer(
         f"✅ Ник изменён!\n\nНик: {nickname}",
-        reply_markup=get_profile_keyboard()
+        reply_markup=await get_profile_markup(message.from_user.id)
     )
 
 @dp.message(ProfileSetup.waiting_for_photo)
@@ -153,31 +178,32 @@ async def process_edit_photo(message: types.Message, state: FSMContext):
 
     await message.answer(
         f"✅ Фото изменено!\n\nНик: {old_nickname}",
-        reply_markup=get_profile_keyboard()
+        reply_markup=await get_profile_markup(message.from_user.id)
     )
 
 @dp.callback_query(F.data == "profile")
 async def show_profile(callback: types.CallbackQuery):
     profile = await get_user_profile(callback.from_user.id)
     if profile and profile[0]:
-        text = f"Никнейм: {profile[0]}"
+        text = await build_profile_text(callback.from_user.id, profile[0])
+        profile_markup = await get_profile_markup(callback.from_user.id)
         if profile[1]:
             try:
                 await callback.message.answer_photo(
                     photo=profile[1],
                     caption=text,
-                    reply_markup=get_profile_keyboard()
+                    reply_markup=profile_markup
                 )
             except Exception:
                 await callback.message.answer(
                     text + "\n⚠️ Фото устарело.",
-                    reply_markup=get_profile_keyboard()
+                    reply_markup=profile_markup
                 )
             await callback.message.delete()
         else:
             await callback.message.edit_text(
                 text,
-                reply_markup=get_profile_keyboard()
+                reply_markup=profile_markup
             )
         await callback.answer()
     else:
@@ -198,6 +224,15 @@ async def edit_photo(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.delete()
     await callback.message.answer("Отправьте новое фото:", reply_markup=get_cancel_keyboard())
     await state.set_state(ProfileSetup.editing_photo)
+
+
+@dp.callback_query(F.data == "link_vk_help")
+async def link_vk_help(callback: types.CallbackQuery):
+    await callback.answer()
+    await callback.message.answer(
+        "Чтобы привязать VK, откройте VK Mini App и нажмите кнопку привязки Telegram.\n"
+        "После этого вернитесь в бота по ссылке из Mini App."
+    )
 
 @dp.callback_query(F.data == "show_events")
 async def show_events_from_profile(callback: types.CallbackQuery):

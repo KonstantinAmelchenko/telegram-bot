@@ -168,6 +168,21 @@ async def get_vk_user_id_by_telegram_id(telegram_user_id: int) -> Optional[str]:
         return row[0] if row else None
 
 
+async def get_telegram_user_id_by_vk_id(vk_user_id: str) -> Optional[int]:
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute(
+            '''
+            SELECT t.telegram_user_id
+            FROM vk_accounts v
+            JOIN telegram_accounts t ON t.app_user_id = v.app_user_id
+            WHERE v.vk_user_id = ?
+            ''',
+            (vk_user_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
 async def create_vk_link_token(vk_user_id: str, ttl_minutes: int = 10) -> str:
     """
     Создаёт одноразовый токен привязки VK -> Telegram.
@@ -190,6 +205,16 @@ async def create_vk_link_token(vk_user_id: str, ttl_minutes: int = 10) -> str:
             except aiosqlite.IntegrityError:
                 # Теоретически токен может совпасть, генерируем новый.
                 continue
+
+
+async def create_telegram_link_for_vk(vk_user_id: str, bot_username: str, ttl_minutes: int = 10) -> str:
+    """
+    Возвращает deep-link для кнопки "Привязать Telegram" в VK Mini App.
+    Пример: https://t.me/<bot_username>?start=link_<token>
+    """
+    token = await create_vk_link_token(vk_user_id, ttl_minutes=ttl_minutes)
+    normalized_bot_username = bot_username.strip().lstrip("@")
+    return f"https://t.me/{normalized_bot_username}?start=link_{token}"
 
 
 async def consume_vk_link_token(token: str, telegram_user_id: int) -> str:
