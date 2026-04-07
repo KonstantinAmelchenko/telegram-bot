@@ -1,5 +1,5 @@
 from aiogram import types, F
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InputMediaPhoto
@@ -8,6 +8,8 @@ from html import escape
 import logging
 from . import dp
 from database import (
+    consume_vk_link_token,
+    ensure_telegram_identity,
     get_user_profile,
     register_for_event,
     check_user_registration,
@@ -41,8 +43,27 @@ def build_registered_line(total: int, max_people: int) -> str:
 
 
 @dp.message(CommandStart())
-async def cmd_start(message: types.Message, state: FSMContext):
+async def cmd_start(message: types.Message, state: FSMContext, command: CommandObject):
     await state.clear()
+    await ensure_telegram_identity(message.from_user.id)
+
+    if command.args and command.args.startswith("link_"):
+        token = command.args[5:].strip()
+        if token:
+            link_status = await consume_vk_link_token(token, message.from_user.id)
+            if link_status in {"linked", "already_linked"}:
+                await message.answer("✅ Аккаунт VK успешно привязан.")
+            elif link_status == "token_expired":
+                await message.answer("⏱ Ссылка для привязки истекла. Запросите новую в VK Mini App.")
+            elif link_status == "token_used":
+                await message.answer("⚠️ Эта ссылка уже использована. Запросите новую в VK Mini App.")
+            elif link_status == "telegram_linked_to_other":
+                await message.answer("⚠️ Этот Telegram уже привязан к другому VK аккаунту.")
+            elif link_status == "vk_already_has_telegram":
+                await message.answer("⚠️ Этот VK аккаунт уже привязан к другому Telegram.")
+            else:
+                await message.answer("❌ Ссылка для привязки недействительна.")
+
     profile = await get_user_profile(message.from_user.id)
     if profile and profile[0]:
         registrations = await check_user_registration(message.from_user.id)

@@ -1,5 +1,7 @@
 import aiosqlite
+import secrets
 from datetime import datetime
+from typing import Optional
 
 def format_event_date(date_str: str) -> str:
     """Преобразует дату из DD.MM.YYYY в формат 'D месяц' (без года)"""
@@ -26,6 +28,39 @@ def get_day_of_week(date_str: str) -> str:
 async def init_db():
     """Создаёт таблицы при первом запуске"""
     async with aiosqlite.connect("events.db") as db:
+        await db.execute('''
+        CREATE TABLE IF NOT EXISTS app_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
+
+        await db.execute('''
+        CREATE TABLE IF NOT EXISTS telegram_accounts (
+            telegram_user_id INTEGER PRIMARY KEY,
+            app_user_id INTEGER NOT NULL,
+            linked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
+
+        await db.execute('''
+        CREATE TABLE IF NOT EXISTS vk_accounts (
+            vk_user_id TEXT PRIMARY KEY,
+            app_user_id INTEGER NOT NULL,
+            linked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
+
+        await db.execute('''
+        CREATE TABLE IF NOT EXISTS vk_link_tokens (
+            token TEXT PRIMARY KEY,
+            app_user_id INTEGER NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            used_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
+
         await db.execute('''
         CREATE TABLE IF NOT EXISTS profiles (
             user_id INTEGER PRIMARY KEY,
@@ -72,7 +107,160 @@ async def init_db():
         
         await db.commit()
 
+
+async def _create_app_user(db: aiosqlite.Connection) -> int:
+    cursor = await db.execute('INSERT INTO app_users DEFAULT VALUES')
+    return cursor.lastrowid
+
+
+async def ensure_telegram_identity(telegram_user_id: int) -> int:
+    """Гарантирует связь Telegram аккаунта с внутренним app_user_id."""
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute(
+            'SELECT app_user_id FROM telegram_accounts WHERE telegram_user_id = ?',
+            (telegram_user_id,)
+        )
+        row = await cursor.fetchone()
+        if row:
+            return row[0]
+
+        app_user_id = await _create_app_user(db)
+        await db.execute(
+            'INSERT INTO telegram_accounts (telegram_user_id, app_user_id) VALUES (?, ?)',
+            (telegram_user_id, app_user_id)
+        )
+        await db.commit()
+        return app_user_id
+
+
+async def ensure_vk_identity(vk_user_id: str) -> int:
+    """Гарантирует связь VK аккаунта с внутренним app_user_id."""
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute(
+            'SELECT app_user_id FROM vk_accounts WHERE vk_user_id = ?',
+            (vk_user_id,)
+        )
+        row = await cursor.fetchone()
+        if row:
+            return row[0]
+
+        app_user_id = await _create_app_user(db)
+        await db.execute(
+            'INSERT INTO vk_accounts (vk_user_id, app_user_id) VALUES (?, ?)',
+            (vk_user_id, app_user_id)
+        )
+        await db.commit()
+        return app_user_id
+
+
+async def get_vk_user_id_by_telegram_id(telegram_user_id: int) -> Optional[str]:
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute(
+            '''
+            SELECT v.vk_user_id
+            FROM telegram_accounts t
+            JOIN vk_accounts v ON v.app_user_id = t.app_user_id
+            WHERE t.telegram_user_id = ?
+            ''',
+            (telegram_user_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
+async def create_vk_link_token(vk_user_id: str, ttl_minutes: int = 10) -> str:
+    """
+    Создаёт одноразовый токен привязки VK -> Telegram.
+    Этот метод удобно вызывать из backend VK Mini App.
+    """
+    app_user_id = await ensure_vk_identity(vk_user_id)
+    async with aiosqlite.connect("events.db") as db:
+        while True:
+            token = secrets.token_urlsafe(24)
+            try:
+                await db.execute(
+                    '''
+                    INSERT INTO vk_link_tokens (token, app_user_id, expires_at)
+                    VALUES (?, ?, datetime('now', ?))
+                    ''',
+                    (token, app_user_id, f"+{ttl_minutes} minutes")
+                )
+                await db.commit()
+                return token
+            except aiosqlite.IntegrityError:
+                # Теоретически токен может совпасть, генерируем новый.
+                continue
+
+
+async def consume_vk_link_token(token: str, telegram_user_id: int) -> str:
+    """
+    Пытается привязать Telegram аккаунт к app_user по токену.
+    Возвращает статус:
+    - linked
+    - already_linked
+    - token_invalid
+    - token_expired
+    - token_used
+    - telegram_linked_to_other
+    - vk_already_has_telegram
+    """
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute(
+            'SELECT app_user_id, expires_at, used_at FROM vk_link_tokens WHERE token = ?',
+            (token,)
+        )
+        token_row = await cursor.fetchone()
+        if not token_row:
+            return "token_invalid"
+
+        target_app_user_id, expires_at, used_at = token_row
+        if used_at is not None:
+            return "token_used"
+
+        cursor = await db.execute(
+            "SELECT datetime(?) >= datetime('now')",
+            (expires_at,)
+        )
+        is_not_expired = await cursor.fetchone()
+        if not is_not_expired or not is_not_expired[0]:
+            return "token_expired"
+
+        cursor = await db.execute(
+            'SELECT app_user_id FROM telegram_accounts WHERE telegram_user_id = ?',
+            (telegram_user_id,)
+        )
+        tg_row = await cursor.fetchone()
+
+        if tg_row and tg_row[0] != target_app_user_id:
+            return "telegram_linked_to_other"
+
+        cursor = await db.execute(
+            '''
+            SELECT telegram_user_id
+            FROM telegram_accounts
+            WHERE app_user_id = ? AND telegram_user_id != ?
+            ''',
+            (target_app_user_id, telegram_user_id)
+        )
+        existing_tg_for_vk = await cursor.fetchone()
+        if existing_tg_for_vk:
+            return "vk_already_has_telegram"
+
+        if not tg_row:
+            await db.execute(
+                'INSERT INTO telegram_accounts (telegram_user_id, app_user_id) VALUES (?, ?)',
+                (telegram_user_id, target_app_user_id)
+            )
+
+        await db.execute(
+            "UPDATE vk_link_tokens SET used_at = datetime('now') WHERE token = ?",
+            (token,)
+        )
+        await db.commit()
+        return "already_linked" if tg_row else "linked"
+
 async def save_profile(user_id: int, username: str, nickname: str, photo_id: str):
+    await ensure_telegram_identity(user_id)
     async with aiosqlite.connect("events.db") as db:
         await db.execute(
             'INSERT OR REPLACE INTO profiles (user_id, username, nickname, photo_id) VALUES (?, ?, ?, ?)',
@@ -89,6 +277,7 @@ async def get_user_profile(user_id: int):
         return await cursor.fetchone()
 
 async def register_for_event(user_id: int, event_id: int, guests_count: int = 0):
+    await ensure_telegram_identity(user_id)
     async with aiosqlite.connect("events.db") as db:
         try:
             await db.execute(
