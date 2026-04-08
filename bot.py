@@ -14,8 +14,10 @@ bot = Bot(token=BOT_TOKEN)
 
 
 def maybe_start_embedded_vk_bot() -> None:
-    if os.getenv("EMBEDDED_VK_BOT", "1") != "1":
-        logging.info("Embedded VK bot is disabled by EMBEDDED_VK_BOT")
+    # В проде VK обычно работает отдельным worker-процессом (см. Procfile).
+    # Чтобы не было двойного запуска, embedded-режим включается только явно.
+    if os.getenv("EMBEDDED_VK_BOT", "0") != "1":
+        logging.info("Embedded VK bot is disabled (set EMBEDDED_VK_BOT=1 to enable)")
         return
 
     has_vk_env = all([
