@@ -10,20 +10,22 @@ from . import dp
 from database import (
     consume_vk_link_token,
     ensure_telegram_identity,
-    get_user_profile,
-    register_for_event,
-    check_user_registration,
-    unregister_from_event,
-    get_event_participants,
-    get_all_event_counts,
-    get_all_events,
-    get_event_by_id
+    register_for_event_by_app_user,
+    unregister_from_event_by_app_user,
+)
+from core import (
+    HELP_TEXT,
+    get_event_view,
+    get_events_menu_payload,
+    is_help_command,
+    parse_event_details_command,
+    parse_register_command,
+    parse_unregister_command,
 )
 from keyboards import (
     get_events_keyboard,
     get_guests_keyboard,
     get_registered_keyboard,
-    get_main_menu_keyboard,
     get_cancel_keyboard
 )
 from .profile import ProfileSetup
@@ -33,19 +35,10 @@ class EventRegistration(StatesGroup):
     waiting_for_guests = State()
 
 
-def get_registered_total(participants: list) -> int:
-    return sum((guests or 0) + 1 for _, _, _, guests in participants)
-
-
-def build_registered_line(total: int, max_people: int) -> str:
-    limit_text = str(max_people) if max_people and max_people > 0 else "не указано"
-    return f"<b>Зарегистрировано: {total} из {limit_text}</b>"
-
-
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext, command: CommandObject):
     await state.clear()
-    await ensure_telegram_identity(message.from_user.id)
+    app_user_id = await ensure_telegram_identity(message.from_user.id)
 
     if command.args and command.args.startswith("link_"):
         token = command.args[5:].strip()
@@ -64,14 +57,15 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
             else:
                 await message.answer("❌ Ссылка для привязки недействительна.")
 
-    profile = await get_user_profile(message.from_user.id)
-    if profile and profile[0]:
-        registrations = await check_user_registration(message.from_user.id)
-        event_counts = await get_all_event_counts()
-        events = await get_all_events()
+    events_payload = await get_events_menu_payload(app_user_id)
+    if events_payload["has_profile"]:
         await message.answer(
-            f"👋 Привет, {profile[0]}!",
-            reply_markup=get_events_keyboard(registrations, event_counts, events)
+            f"👋 Привет, {events_payload['nickname']}!",
+            reply_markup=get_events_keyboard(
+                events_payload["registrations"],
+                events_payload["event_counts"],
+                events_payload["events"],
+            )
         )
     else:
         await message.answer(
@@ -84,15 +78,17 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
 @dp.message(Command("events"))
 async def cmd_events(message: types.Message, state: FSMContext):
     await state.clear()
-    profile = await get_user_profile(message.from_user.id)
-    if profile and profile[0]:
-        registrations = await check_user_registration(message.from_user.id)
-        event_counts = await get_all_event_counts()
-        events = await get_all_events()
+    app_user_id = await ensure_telegram_identity(message.from_user.id)
+    events_payload = await get_events_menu_payload(app_user_id)
+    if events_payload["has_profile"]:
         await message.answer(
             "📋 Мероприятия\n\nВыберите мероприятие:",
             parse_mode="Markdown",
-            reply_markup=get_events_keyboard(registrations, event_counts, events)
+            reply_markup=get_events_keyboard(
+                events_payload["registrations"],
+                events_payload["event_counts"],
+                events_payload["events"],
+            )
         )
     else:
         await message.answer(
@@ -107,53 +103,94 @@ async def btn_menu(message: types.Message, state: FSMContext):
     await cmd_events(message, state)
 
 
+@dp.message(F.text)
+async def text_commands_router(message: types.Message, state: FSMContext):
+    text = (message.text or "").strip().lower()
+    if not text:
+        return
+
+    if is_help_command(text):
+        await state.clear()
+        await message.answer(HELP_TEXT)
+        return
+
+    app_user_id = await ensure_telegram_identity(message.from_user.id)
+
+    event_id = parse_event_details_command(text)
+    if event_id is not None:
+        await state.clear()
+        event_view = await get_event_view(app_user_id, event_id)
+        if not event_view:
+            await message.answer("Мероприятие не найдено или удалено.")
+            return
+        markup = get_registered_keyboard(event_id) if event_view.registered else get_guests_keyboard(event_id)
+        await message.answer(event_view.text_html, parse_mode="HTML", reply_markup=markup)
+        return
+
+    register_data = parse_register_command(text)
+    if register_data is not None:
+        await state.clear()
+        event_id, guests_count = register_data
+        if guests_count < 0 or guests_count > 10:
+            await message.answer("Количество гостей должно быть от 0 до 10.")
+            return
+        event_view = await get_event_view(app_user_id, event_id)
+        if not event_view:
+            await message.answer("Мероприятие не найдено или удалено.")
+            return
+        success = await register_for_event_by_app_user(app_user_id, event_id, guests_count)
+        if not success:
+            await message.answer("Вы уже записаны на это мероприятие.")
+            return
+        updated = await get_event_view(app_user_id, event_id)
+        if not updated:
+            await message.answer("Мероприятие не найдено или удалено.")
+            return
+        await message.answer(updated.text_html, parse_mode="HTML", reply_markup=get_registered_keyboard(event_id))
+        return
+
+    unregister_event_id = parse_unregister_command(text)
+    if unregister_event_id is not None:
+        await state.clear()
+        event_view = await get_event_view(app_user_id, unregister_event_id)
+        if not event_view:
+            await message.answer("Мероприятие не найдено или удалено.")
+            return
+        await unregister_from_event_by_app_user(app_user_id, unregister_event_id)
+        updated = await get_event_view(app_user_id, unregister_event_id)
+        if not updated:
+            await message.answer("Мероприятие не найдено или удалено.")
+            return
+        await message.answer(
+            updated.text_html,
+            parse_mode="HTML",
+            reply_markup=get_guests_keyboard(unregister_event_id),
+        )
+        return
+
+
 @dp.callback_query(F.data.startswith("event_"))
 async def select_event(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
+    app_user_id = await ensure_telegram_identity(callback.from_user.id)
     event_id = int(callback.data.split("_")[1])
-    event = await get_event_by_id(event_id)
-    if not event:
+    event_view = await get_event_view(app_user_id, event_id)
+    if not event_view:
         await callback.answer("Мероприятие не найдено или удалено", show_alert=True)
         return
 
-    _, event_name, event_date, event_time, event_address, max_people = event
-    registered = await check_user_registration(callback.from_user.id, event_id)
-    participants = await get_event_participants(event_id)
-    total = get_registered_total(participants)
-
-    text = f"<b>{escape(event_name)}</b>"
-    if event_address:
-        text += f". {escape(event_address)}\n"
-    else:
-        text += "\n"
-    text += f"Дата: {escape(event_date)}\n"
-    text += f"Время: {escape(event_time)}\n"
-    text += f"{build_registered_line(total, max_people)}\n\n"
-
-    if participants:
-        text += "<b>Список участников:</b>\n"
-        for i, (participant_user_id, nickname, photo_id, guests) in enumerate(participants, 1):
-            safe_nickname = escape(nickname or "Без ника")
-            is_me = " (вы)" if participant_user_id == callback.from_user.id else ""
-            if guests > 0:
-                text += f"{i}. {safe_nickname} +{guests}{is_me}\n"
-            else:
-                text += f"{i}. {safe_nickname}{is_me}\n"
-    else:
-        text += "Пока никого нет. Будьте первым!"
-
-    if registered:
+    if event_view.registered:
         keyboard = get_registered_keyboard(event_id)
     else:
         keyboard = get_guests_keyboard(event_id)
 
     await callback.message.edit_text(
-        text,
+        event_view.text_html,
         parse_mode="HTML",
         reply_markup=keyboard
     )
 
-    photos_with_ids = [(nickname, photo_id) for _, nickname, photo_id, _ in participants if photo_id]
+    photos_with_ids = [(nickname, photo_id) for _, nickname, photo_id, _ in event_view.participants if photo_id]
     photo_message_ids = []
 
     if photos_with_ids:
@@ -177,25 +214,20 @@ async def select_guests(callback: types.CallbackQuery, state: FSMContext):
     guests_count = int(data[2])
     await state.update_data(event_id=event_id, guests_count=guests_count)
 
-    event = await get_event_by_id(event_id)
-    if not event:
+    event_view = await get_event_view(app_user_id=await ensure_telegram_identity(callback.from_user.id), event_id=event_id)
+    if not event_view:
         await callback.answer("Мероприятие не найдено", show_alert=True)
         return
 
-    event_name = event[1]
-    event_address = event[4]
-    max_people = event[5]
-
-    text = f"<b>{escape(event_name)}</b>"
-    if event_address:
-        text += f". {escape(event_address)}\n"
+    text = f"<b>{escape(event_view.name)}</b>"
+    if event_view.address:
+        text += f". {escape(event_view.address)}\n"
     else:
         text += "\n"
-    text += f"Дата: {escape(event[2])}\n"
-    text += f"Время: {escape(event[3])}\n"
-    participants = await get_event_participants(event_id)
-    total = get_registered_total(participants)
-    text += f"{build_registered_line(total, max_people)}\n\n"
+    text += f"Дата: {escape(event_view.date)}\n"
+    text += f"Время: {escape(event_view.time)}\n"
+    limit_text = str(event_view.max_people) if event_view.max_people and event_view.max_people > 0 else "не указано"
+    text += f"<b>Зарегистрировано: {event_view.total_registered} из {limit_text}</b>\n\n"
 
     if guests_count > 0:
         text += f"👥 Вы записываетесь +{guests_count} гост(ей)\n\n"
@@ -217,42 +249,25 @@ async def select_guests(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("confirm_register_"))
 async def confirm_register(callback: types.CallbackQuery, state: FSMContext):
+    app_user_id = await ensure_telegram_identity(callback.from_user.id)
     event_id = int(callback.data.split("_")[2])
     data = await state.get_data()
     guests_count = data.get("guests_count", 0)
-    event = await get_event_by_id(event_id)
-    if not event:
+    if not await get_event_view(app_user_id, event_id):
         await callback.answer("Мероприятие не найдено", show_alert=True)
         return
 
-    event_name = event[1]
-    event_address = event[4]
-    max_people = event[5]
-    success = await register_for_event(callback.from_user.id, event_id, guests_count)
+    success = await register_for_event_by_app_user(app_user_id, event_id, guests_count)
 
     if success:
-        participants = await get_event_participants(event_id)
-        total = get_registered_total(participants)
-        text = f"<b>{escape(event_name)}</b>"
-        if event_address:
-            text += f". {escape(event_address)}\n"
-        else:
-            text += "\n"
-        text += f"Дата: {escape(event[2])}\n"
-        text += f"Время: {escape(event[3])}\n"
-        text += f"{build_registered_line(total, max_people)}\n\n"
-        text += "<b>Список участников:</b>\n"
-
-        for i, (participant_user_id, nickname, photo_id, guests) in enumerate(participants, 1):
-            safe_nickname = escape(nickname or "Без ника")
-            is_me = " (вы)" if participant_user_id == callback.from_user.id else ""
-            if guests > 0:
-                text += f"{i}. {safe_nickname} +{guests}{is_me}\n"
-            else:
-                text += f"{i}. {safe_nickname}{is_me}\n"
+        event_view = await get_event_view(app_user_id, event_id)
+        if not event_view:
+            await callback.answer("Мероприятие не найдено", show_alert=True)
+            await state.clear()
+            return
 
         await callback.message.edit_text(
-            text,
+            event_view.text_html,
             parse_mode="HTML",
             reply_markup=get_registered_keyboard(event_id)
         )
@@ -264,43 +279,22 @@ async def confirm_register(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("unregister_"))
 async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
+    app_user_id = await ensure_telegram_identity(callback.from_user.id)
     event_id = int(callback.data.split("_")[1])
-    event = await get_event_by_id(event_id)
-    if not event:
+    if not await get_event_view(app_user_id, event_id):
         await callback.answer("Мероприятие не найдено", show_alert=True)
         return
 
-    event_name = event[1]
-    event_address = event[4]
-    max_people = event[5]
-    success = await unregister_from_event(callback.from_user.id, event_id)
+    success = await unregister_from_event_by_app_user(app_user_id, event_id)
 
     if success:
-        participants = await get_event_participants(event_id)
-        total = get_registered_total(participants)
-        text = f"<b>{escape(event_name)}</b>"
-        if event_address:
-            text += f". {escape(event_address)}\n"
-        else:
-            text += "\n"
-        text += f"Дата: {escape(event[2])}\n"
-        text += f"Время: {escape(event[3])}\n"
-        text += f"{build_registered_line(total, max_people)}\n\n"
-        text += "<b>Список участников:</b>\n"
-
-        for i, (participant_user_id, nickname, photo_id, guests) in enumerate(participants, 1):
-            safe_nickname = escape(nickname or "Без ника")
-            is_me = " (вы)" if participant_user_id == callback.from_user.id else ""
-            if guests > 0:
-                text += f"{i}. {safe_nickname} +{guests}{is_me}\n"
-            else:
-                text += f"{i}. {safe_nickname}{is_me}\n"
-
-        if not participants:
-            text += "Пока никого нет."
+        event_view = await get_event_view(app_user_id, event_id)
+        if not event_view:
+            await callback.answer("Мероприятие не найдено", show_alert=True)
+            return
 
         await callback.message.edit_text(
-            text,
+            event_view.text_html,
             parse_mode="HTML",
             reply_markup=get_guests_keyboard(event_id)
         )
@@ -312,15 +306,17 @@ async def unregister_event(callback: types.CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data == "back")
 async def go_back(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
-    profile = await get_user_profile(callback.from_user.id)
-    if profile and profile[0]:
-        registrations = await check_user_registration(callback.from_user.id)
-        event_counts = await get_all_event_counts()
-        events = await get_all_events()
+    app_user_id = await ensure_telegram_identity(callback.from_user.id)
+    events_payload = await get_events_menu_payload(app_user_id)
+    if events_payload["has_profile"]:
         await callback.message.edit_text(
             "📋 Мероприятия\n\nВыберите мероприятие:",
             parse_mode="Markdown",
-            reply_markup=get_events_keyboard(registrations, event_counts, events)
+            reply_markup=get_events_keyboard(
+                events_payload["registrations"],
+                events_payload["event_counts"],
+                events_payload["events"],
+            )
         )
     else:
         await callback.message.edit_text(

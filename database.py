@@ -113,6 +113,97 @@ async def _create_app_user(db: aiosqlite.Connection) -> int:
     return cursor.lastrowid
 
 
+async def _migrate_legacy_user_data(
+    db: aiosqlite.Connection,
+    legacy_user_id: int,
+    app_user_id: int,
+) -> None:
+    """
+    Переносит старые данные, где user_id == telegram_user_id, в app_user_id.
+    Делается мягко и идемпотентно.
+    """
+    if legacy_user_id == app_user_id:
+        return
+
+    await db.execute(
+        '''
+        INSERT OR IGNORE INTO profiles (user_id, username, nickname, photo_id)
+        SELECT ?, username, nickname, photo_id
+        FROM profiles
+        WHERE user_id = ?
+        ''',
+        (app_user_id, legacy_user_id)
+    )
+
+    await db.execute(
+        '''
+        INSERT INTO registrations (user_id, event_id, guests_count)
+        SELECT ?, event_id, guests_count
+        FROM registrations
+        WHERE user_id = ?
+        ON CONFLICT(user_id, event_id)
+        DO UPDATE SET guests_count = MAX(registrations.guests_count, excluded.guests_count)
+        ''',
+        (app_user_id, legacy_user_id)
+    )
+
+    await db.execute(
+        'DELETE FROM registrations WHERE user_id = ?',
+        (legacy_user_id,)
+    )
+    await db.execute(
+        'DELETE FROM profiles WHERE user_id = ?',
+        (legacy_user_id,)
+    )
+
+
+async def get_app_user_id_by_telegram_id(telegram_user_id: int) -> Optional[int]:
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute(
+            'SELECT app_user_id FROM telegram_accounts WHERE telegram_user_id = ?',
+            (telegram_user_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
+async def get_app_user_id_by_vk_id(vk_user_id: str) -> Optional[int]:
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute(
+            'SELECT app_user_id FROM vk_accounts WHERE vk_user_id = ?',
+            (vk_user_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+
+async def get_linked_accounts_by_app_user(app_user_id: int) -> tuple[Optional[int], Optional[str]]:
+    async with aiosqlite.connect("events.db") as db:
+        cursor = await db.execute(
+            '''
+            SELECT telegram_user_id
+            FROM telegram_accounts
+            WHERE app_user_id = ?
+            LIMIT 1
+            ''',
+            (app_user_id,)
+        )
+        tg_row = await cursor.fetchone()
+
+        cursor = await db.execute(
+            '''
+            SELECT vk_user_id
+            FROM vk_accounts
+            WHERE app_user_id = ?
+            LIMIT 1
+            ''',
+            (app_user_id,)
+        )
+        vk_row = await cursor.fetchone()
+
+        return (tg_row[0] if tg_row else None, vk_row[0] if vk_row else None)
+
+
 async def ensure_telegram_identity(telegram_user_id: int) -> int:
     """Гарантирует связь Telegram аккаунта с внутренним app_user_id."""
     async with aiosqlite.connect("events.db") as db:
@@ -122,6 +213,8 @@ async def ensure_telegram_identity(telegram_user_id: int) -> int:
         )
         row = await cursor.fetchone()
         if row:
+            await _migrate_legacy_user_data(db, telegram_user_id, row[0])
+            await db.commit()
             return row[0]
 
         app_user_id = await _create_app_user(db)
@@ -129,6 +222,7 @@ async def ensure_telegram_identity(telegram_user_id: int) -> int:
             'INSERT INTO telegram_accounts (telegram_user_id, app_user_id) VALUES (?, ?)',
             (telegram_user_id, app_user_id)
         )
+        await _migrate_legacy_user_data(db, telegram_user_id, app_user_id)
         await db.commit()
         return app_user_id
 
@@ -272,6 +366,7 @@ async def consume_vk_link_token(token: str, telegram_user_id: int) -> str:
                 'UPDATE telegram_accounts SET app_user_id = ? WHERE telegram_user_id = ?',
                 (target_app_user_id, telegram_user_id)
             )
+            await _migrate_legacy_user_data(db, telegram_user_id, target_app_user_id)
             tg_row = (target_app_user_id,)
 
         cursor = await db.execute(
@@ -299,59 +394,87 @@ async def consume_vk_link_token(token: str, telegram_user_id: int) -> str:
         await db.commit()
         return "already_linked" if tg_row else "linked"
 
-async def save_profile(user_id: int, username: str, nickname: str, photo_id: str):
-    await ensure_telegram_identity(user_id)
+
+async def save_profile_by_app_user(app_user_id: int, username: str, nickname: str, photo_id: Optional[str]):
     async with aiosqlite.connect("events.db") as db:
         await db.execute(
             'INSERT OR REPLACE INTO profiles (user_id, username, nickname, photo_id) VALUES (?, ?, ?, ?)',
-            (user_id, username, nickname, photo_id)
+            (app_user_id, username, nickname, photo_id)
         )
         await db.commit()
 
-async def get_user_profile(user_id: int):
+
+async def get_user_profile_by_app_user(app_user_id: int):
     async with aiosqlite.connect("events.db") as db:
         cursor = await db.execute(
             'SELECT nickname, photo_id FROM profiles WHERE user_id = ?',
-            (user_id,)
+            (app_user_id,)
         )
         return await cursor.fetchone()
 
-async def register_for_event(user_id: int, event_id: int, guests_count: int = 0):
-    await ensure_telegram_identity(user_id)
+
+async def register_for_event_by_app_user(app_user_id: int, event_id: int, guests_count: int = 0):
     async with aiosqlite.connect("events.db") as db:
         try:
             await db.execute(
                 'INSERT INTO registrations (user_id, event_id, guests_count) VALUES (?, ?, ?)',
-                (user_id, event_id, guests_count)
+                (app_user_id, event_id, guests_count)
             )
             await db.commit()
             return True
         except aiosqlite.IntegrityError:
             return False
 
-async def check_user_registration(user_id: int, event_id: int = None):
+
+async def check_user_registration_by_app_user(app_user_id: int, event_id: int = None):
     async with aiosqlite.connect("events.db") as db:
         if event_id:
             cursor = await db.execute(
                 'SELECT event_id FROM registrations WHERE user_id = ? AND event_id = ?',
-                (user_id, event_id)
+                (app_user_id, event_id)
             )
         else:
             cursor = await db.execute(
                 'SELECT event_id FROM registrations WHERE user_id = ?',
-                (user_id,)
+                (app_user_id,)
             )
         result = await cursor.fetchall()
         return [r[0] for r in result] if result else []
 
-async def unregister_from_event(user_id: int, event_id: int):
+
+async def unregister_from_event_by_app_user(app_user_id: int, event_id: int):
     async with aiosqlite.connect("events.db") as db:
         await db.execute(
             'DELETE FROM registrations WHERE user_id = ? AND event_id = ?',
-            (user_id, event_id)
+            (app_user_id, event_id)
         )
         await db.commit()
         return True
+
+
+async def save_profile(user_id: int, username: str, nickname: str, photo_id: str):
+    app_user_id = await ensure_telegram_identity(user_id)
+    await save_profile_by_app_user(app_user_id, username, nickname, photo_id)
+
+
+async def get_user_profile(user_id: int):
+    app_user_id = await ensure_telegram_identity(user_id)
+    return await get_user_profile_by_app_user(app_user_id)
+
+
+async def register_for_event(user_id: int, event_id: int, guests_count: int = 0):
+    app_user_id = await ensure_telegram_identity(user_id)
+    return await register_for_event_by_app_user(app_user_id, event_id, guests_count)
+
+
+async def check_user_registration(user_id: int, event_id: int = None):
+    app_user_id = await ensure_telegram_identity(user_id)
+    return await check_user_registration_by_app_user(app_user_id, event_id)
+
+
+async def unregister_from_event(user_id: int, event_id: int):
+    app_user_id = await ensure_telegram_identity(user_id)
+    return await unregister_from_event_by_app_user(app_user_id, event_id)
 
 async def get_event_participants(event_id: int):
     async with aiosqlite.connect("events.db") as db:

@@ -5,12 +5,17 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.exceptions import TelegramBadRequest
 from . import dp
 from database import (
-    save_profile,
-    get_user_profile,
-    check_user_registration,
-    get_all_event_counts,
-    get_all_events,
-    get_vk_user_id_by_telegram_id
+    ensure_telegram_identity,
+    save_profile_by_app_user,
+    get_user_profile_by_app_user,
+    get_linked_accounts_by_app_user,
+)
+from core import (
+    build_profile_text,
+    get_events_menu_payload,
+    is_photo_command,
+    parse_nick_command,
+    validate_nickname,
 )
 from keyboards import (
     get_profile_keyboard,
@@ -20,29 +25,19 @@ from keyboards import (
     get_events_keyboard
 )
 
-
-async def build_profile_text(telegram_user_id: int, nickname: str) -> str:
-    vk_user_id = await get_vk_user_id_by_telegram_id(telegram_user_id)
-    vk_status = f"✅ Привязан (ID: {vk_user_id})" if vk_user_id else "⬇️ Нажмите кнопку «Привязать VK»"
-    return (
-        f"Никнейм: {nickname}\n"
-        f"Telegram: ✅ Привязан (ID: {telegram_user_id})\n"
-        f"VK: {vk_status}"
-    )
-
-
-async def get_profile_markup(telegram_user_id: int):
-    vk_user_id = await get_vk_user_id_by_telegram_id(telegram_user_id)
+async def get_profile_markup(app_user_id: int):
+    _, vk_user_id = await get_linked_accounts_by_app_user(app_user_id)
     return get_profile_keyboard(is_vk_linked=bool(vk_user_id))
 
 
 @dp.message(Command("profile"))
 async def cmd_profile(message: types.Message, state: FSMContext):
     await state.clear()
-    profile = await get_user_profile(message.from_user.id)
+    app_user_id = await ensure_telegram_identity(message.from_user.id)
+    profile = await get_user_profile_by_app_user(app_user_id)
     if profile and profile[0]:
-        text = await build_profile_text(message.from_user.id, profile[0])
-        profile_markup = await get_profile_markup(message.from_user.id)
+        text = await build_profile_text(app_user_id)
+        profile_markup = await get_profile_markup(app_user_id)
         if profile[1]:
             try:
                 await message.answer_photo(
@@ -72,13 +67,42 @@ class ProfileSetup(StatesGroup):
     editing_nickname = State()
     editing_photo = State()
 
+
+@dp.message(F.text.regexp(r"(?i)^ник\s+.+$"))
+async def text_set_nickname(message: types.Message, state: FSMContext):
+    await state.clear()
+    nickname = parse_nick_command(message.text or "")
+    if not nickname or not validate_nickname(nickname):
+        await message.answer("Ник от 2 до 20 символов:")
+        return
+
+    app_user_id = await ensure_telegram_identity(message.from_user.id)
+    profile = await get_user_profile_by_app_user(app_user_id)
+    old_photo_id = profile[1] if profile else None
+    await save_profile_by_app_user(app_user_id, message.from_user.username, nickname, old_photo_id)
+    await message.answer(
+        f"✅ Ник изменён!\n\nНик: {nickname}",
+        reply_markup=await get_profile_markup(app_user_id)
+    )
+
+
+@dp.message(F.text.regexp(r"(?i)^(фото|photo|обновить фото|сменить фото)$"))
+async def text_change_photo(message: types.Message, state: FSMContext):
+    await state.clear()
+    if not is_photo_command((message.text or "").strip().lower()):
+        return
+    await message.answer("Отправьте новое фото:", reply_markup=get_cancel_keyboard())
+    await state.set_state(ProfileSetup.editing_photo)
+
+
 @dp.message(F.text == "👤 Профиль")
 async def btn_profile(message: types.Message, state: FSMContext):
     await state.clear()
-    profile = await get_user_profile(message.from_user.id)
+    app_user_id = await ensure_telegram_identity(message.from_user.id)
+    profile = await get_user_profile_by_app_user(app_user_id)
     if profile and profile[0]:
-        text = await build_profile_text(message.from_user.id, profile[0])
-        profile_markup = await get_profile_markup(message.from_user.id)
+        text = await build_profile_text(app_user_id)
+        profile_markup = await get_profile_markup(app_user_id)
         if profile[1]:
             try:
                 await message.answer_photo(
@@ -109,7 +133,7 @@ async def process_nickname(message: types.Message, state: FSMContext):
         await message.answer("Отменено. /start", reply_markup=types.ReplyKeyboardRemove())
         return
     nickname = message.text.strip()
-    if len(nickname) < 2 or len(nickname) > 20:
+    if not validate_nickname(nickname):
         await message.answer("Ник от 2 до 20 символов:")
         return
     await state.update_data(nickname=nickname)
@@ -126,26 +150,28 @@ async def process_edit_nickname(message: types.Message, state: FSMContext):
         await message.answer("Отменено.", reply_markup=get_main_menu_keyboard())
         return
     nickname = message.text.strip()
-    if len(nickname) < 2 or len(nickname) > 20:
+    if not validate_nickname(nickname):
         await message.answer("Ник от 2 до 20 символов:")
         return
-    profile = await get_user_profile(message.from_user.id)
+    app_user_id = await ensure_telegram_identity(message.from_user.id)
+    profile = await get_user_profile_by_app_user(app_user_id)
     old_photo_id = profile[1] if profile else None
 
-    await save_profile(message.from_user.id, message.from_user.username, nickname, old_photo_id)
+    await save_profile_by_app_user(app_user_id, message.from_user.username, nickname, old_photo_id)
     await state.clear()
 
     await message.answer(
         f"✅ Ник изменён!\n\nНик: {nickname}",
-        reply_markup=await get_profile_markup(message.from_user.id)
+        reply_markup=await get_profile_markup(app_user_id)
     )
 
 @dp.message(ProfileSetup.waiting_for_photo)
 async def process_photo(message: types.Message, state: FSMContext):
+    app_user_id = await ensure_telegram_identity(message.from_user.id)
     if message.text == "⏭️ Пропустить":
         data = await state.get_data()
         nickname = data.get("nickname", message.from_user.username)
-        await save_profile(message.from_user.id, message.from_user.username, nickname, None)
+        await save_profile_by_app_user(app_user_id, message.from_user.username, nickname, None)
         await state.clear()
         await message.answer("✅ Профиль готов!", reply_markup=get_main_menu_keyboard())
         return
@@ -155,7 +181,7 @@ async def process_photo(message: types.Message, state: FSMContext):
     photo_id = message.photo[-1].file_id
     data = await state.get_data()
     nickname = data.get("nickname", message.from_user.username)
-    await save_profile(message.from_user.id, message.from_user.username, nickname, photo_id)
+    await save_profile_by_app_user(app_user_id, message.from_user.username, nickname, photo_id)
     await state.clear()
     await message.answer(f"✅ Профиль готов!\n\nНик: {nickname}", reply_markup=get_main_menu_keyboard())
 
@@ -168,25 +194,27 @@ async def process_edit_photo(message: types.Message, state: FSMContext):
     if not message.photo:
         await message.answer("Это не фото! Отправь фотографию:")
         return
-    profile = await get_user_profile(message.from_user.id)
+    app_user_id = await ensure_telegram_identity(message.from_user.id)
+    profile = await get_user_profile_by_app_user(app_user_id)
     old_nickname = profile[0] if profile else message.from_user.username
 
     photo_id = message.photo[-1].file_id
 
-    await save_profile(message.from_user.id, message.from_user.username, old_nickname, photo_id)
+    await save_profile_by_app_user(app_user_id, message.from_user.username, old_nickname, photo_id)
     await state.clear()
 
     await message.answer(
         f"✅ Фото изменено!\n\nНик: {old_nickname}",
-        reply_markup=await get_profile_markup(message.from_user.id)
+        reply_markup=await get_profile_markup(app_user_id)
     )
 
 @dp.callback_query(F.data == "profile")
 async def show_profile(callback: types.CallbackQuery):
-    profile = await get_user_profile(callback.from_user.id)
+    app_user_id = await ensure_telegram_identity(callback.from_user.id)
+    profile = await get_user_profile_by_app_user(app_user_id)
     if profile and profile[0]:
-        text = await build_profile_text(callback.from_user.id, profile[0])
-        profile_markup = await get_profile_markup(callback.from_user.id)
+        text = await build_profile_text(app_user_id)
+        profile_markup = await get_profile_markup(app_user_id)
         if profile[1]:
             try:
                 await callback.message.answer_photo(
@@ -236,11 +264,14 @@ async def link_vk_help(callback: types.CallbackQuery):
 
 @dp.callback_query(F.data == "show_events")
 async def show_events_from_profile(callback: types.CallbackQuery):
-    registrations = await check_user_registration(callback.from_user.id)
-    event_counts = await get_all_event_counts()
-    events = await get_all_events()
+    app_user_id = await ensure_telegram_identity(callback.from_user.id)
+    payload = await get_events_menu_payload(app_user_id)
     events_text = "📋 **Мероприятия**\n\nВыберите мероприятие:"
-    events_keyboard = get_events_keyboard(registrations, event_counts, events)
+    events_keyboard = get_events_keyboard(
+        payload["registrations"],
+        payload["event_counts"],
+        payload["events"],
+    )
     try:
         await callback.message.edit_text(
             events_text,
