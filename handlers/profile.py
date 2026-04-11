@@ -18,11 +18,11 @@ from core import (
     validate_nickname,
 )
 from keyboards import (
-    get_profile_keyboard,
+    get_events_keyboard,
     get_main_menu_keyboard,
-    get_cancel_keyboard,
+    get_profile_keyboard,
     get_skip_keyboard,
-    get_events_keyboard
+    get_cancel_keyboard,
 )
 
 async def get_profile_markup(app_user_id: int):
