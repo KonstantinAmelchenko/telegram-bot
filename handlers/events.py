@@ -105,6 +105,12 @@ async def btn_menu(message: types.Message, state: FSMContext):
 
 @dp.message(F.text)
 async def text_commands_router(message: types.Message, state: FSMContext):
+    # Проверяем, не находится ли пользователь в другом FSM состоянии
+    current_state = await state.get_state()
+    if current_state is not None:
+        # Пользователь в другом состоянии (например, создание мероприятия)
+        return
+    
     text = (message.text or "").strip().lower()
     if not text:
         return
