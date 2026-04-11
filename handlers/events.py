@@ -103,78 +103,6 @@ async def btn_menu(message: types.Message, state: FSMContext):
     await cmd_events(message, state)
 
 
-@dp.message(F.text)
-async def text_commands_router(message: types.Message, state: FSMContext):
-    # Проверяем, не находится ли пользователь в другом FSM состоянии
-    current_state = await state.get_state()
-    if current_state is not None:
-        # Пользователь в другом состоянии (например, создание мероприятия)
-        return
-    
-    text = (message.text or "").strip().lower()
-    if not text:
-        return
-
-    if is_help_command(text):
-        await state.clear()
-        await message.answer(HELP_TEXT)
-        return
-
-    app_user_id = await ensure_telegram_identity(message.from_user.id)
-
-    event_id = parse_event_details_command(text)
-    if event_id is not None:
-        await state.clear()
-        event_view = await get_event_view(app_user_id, event_id)
-        if not event_view:
-            await message.answer("Мероприятие не найдено или удалено.")
-            return
-        markup = get_registered_keyboard(event_id) if event_view.registered else get_guests_keyboard(event_id)
-        await message.answer(event_view.text_html, parse_mode="HTML", reply_markup=markup)
-        return
-
-    register_data = parse_register_command(text)
-    if register_data is not None:
-        await state.clear()
-        event_id, guests_count = register_data
-        if guests_count < 0 or guests_count > 10:
-            await message.answer("Количество гостей должно быть от 0 до 10.")
-            return
-        event_view = await get_event_view(app_user_id, event_id)
-        if not event_view:
-            await message.answer("Мероприятие не найдено или удалено.")
-            return
-        success = await register_for_event_by_app_user(app_user_id, event_id, guests_count)
-        if not success:
-            await message.answer("Вы уже записаны на это мероприятие.")
-            return
-        updated = await get_event_view(app_user_id, event_id)
-        if not updated:
-            await message.answer("Мероприятие не найдено или удалено.")
-            return
-        await message.answer(updated.text_html, parse_mode="HTML", reply_markup=get_registered_keyboard(event_id))
-        return
-
-    unregister_event_id = parse_unregister_command(text)
-    if unregister_event_id is not None:
-        await state.clear()
-        event_view = await get_event_view(app_user_id, unregister_event_id)
-        if not event_view:
-            await message.answer("Мероприятие не найдено или удалено.")
-            return
-        await unregister_from_event_by_app_user(app_user_id, unregister_event_id)
-        updated = await get_event_view(app_user_id, unregister_event_id)
-        if not updated:
-            await message.answer("Мероприятие не найдено или удалено.")
-            return
-        await message.answer(
-            updated.text_html,
-            parse_mode="HTML",
-            reply_markup=get_guests_keyboard(unregister_event_id),
-        )
-        return
-
-
 @dp.callback_query(F.data.startswith("event_"))
 async def select_event(callback: types.CallbackQuery, state: FSMContext):
     await state.clear()
@@ -330,3 +258,75 @@ async def go_back(callback: types.CallbackQuery, state: FSMContext):
             reply_markup=get_cancel_keyboard()
         )
     await callback.answer()
+
+
+@dp.message(F.text)
+async def text_commands_router(message: types.Message, state: FSMContext):
+    # Проверяем, не находится ли пользователь в другом FSM состоянии
+    current_state = await state.get_state()
+    if current_state is not None:
+        # Пользователь в другом состоянии (например, создание мероприятия)
+        return
+    
+    text = (message.text or "").strip().lower()
+    if not text:
+        return
+
+    if is_help_command(text):
+        await state.clear()
+        await message.answer(HELP_TEXT)
+        return
+
+    app_user_id = await ensure_telegram_identity(message.from_user.id)
+
+    event_id = parse_event_details_command(text)
+    if event_id is not None:
+        await state.clear()
+        event_view = await get_event_view(app_user_id, event_id)
+        if not event_view:
+            await message.answer("Мероприятие не найдено или удалено.")
+            return
+        markup = get_registered_keyboard(event_id) if event_view.registered else get_guests_keyboard(event_id)
+        await message.answer(event_view.text_html, parse_mode="HTML", reply_markup=markup)
+        return
+
+    register_data = parse_register_command(text)
+    if register_data is not None:
+        await state.clear()
+        event_id, guests_count = register_data
+        if guests_count < 0 or guests_count > 10:
+            await message.answer("Количество гостей должно быть от 0 до 10.")
+            return
+        event_view = await get_event_view(app_user_id, event_id)
+        if not event_view:
+            await message.answer("Мероприятие не найдено или удалено.")
+            return
+        success = await register_for_event_by_app_user(app_user_id, event_id, guests_count)
+        if not success:
+            await message.answer("Вы уже записаны на это мероприятие.")
+            return
+        updated = await get_event_view(app_user_id, event_id)
+        if not updated:
+            await message.answer("Мероприятие не найдено или удалено.")
+            return
+        await message.answer(updated.text_html, parse_mode="HTML", reply_markup=get_registered_keyboard(event_id))
+        return
+
+    unregister_event_id = parse_unregister_command(text)
+    if unregister_event_id is not None:
+        await state.clear()
+        event_view = await get_event_view(app_user_id, unregister_event_id)
+        if not event_view:
+            await message.answer("Мероприятие не найдено или удалено.")
+            return
+        await unregister_from_event_by_app_user(app_user_id, unregister_event_id)
+        updated = await get_event_view(app_user_id, unregister_event_id)
+        if not updated:
+            await message.answer("Мероприятие не найдено или удалено.")
+            return
+        await message.answer(
+            updated.text_html,
+            parse_mode="HTML",
+            reply_markup=get_guests_keyboard(unregister_event_id),
+        )
+        return
